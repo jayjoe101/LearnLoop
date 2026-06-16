@@ -154,9 +154,7 @@ export async function generateNewPost(prompt?: string) {
 }
 
 export async function loadMorePosts(count = 2) {
-  for (let i = 0; i < count; i++) {
-    await generateNewPost();
-  }
+  await Promise.all(Array.from({ length: count }, () => generateNewPost()));
 }
 
 export async function likePost(postId: string) {
@@ -199,8 +197,8 @@ export async function likePost(postId: string) {
       .eq("id", postId);
   }
 
-  if (Math.random() > 0.5) {
-    await generateNewPost();
+  if (Math.random() > 0.25) {
+    void generateNewPost();
   }
 
   revalidatePath("/");
@@ -317,8 +315,7 @@ export async function refreshFeed() {
     await supabase.from("posts").delete().in("id", deleteIds);
   }
 
-  await generateNewPost();
-  await generateNewPost();
+  await Promise.all([generateNewPost(), generateNewPost()]);
   revalidatePath("/");
   return { kept: keepIds.length };
 }

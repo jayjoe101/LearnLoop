@@ -52,7 +52,7 @@ export const SEED_POSTS = [
     topic: "Space",
     title: "JWST just proved the early universe is way weirder than we thought",
     body: "Astronomers expected tiny galaxies. Instead we found massive, mature ones only 300M years after the Big Bang. This breaks every formation model. Here's the simplest analogy that actually works...",
-    image_url: "https://picsum.photos/id/1015/600/340",
+    image_url: null,
     likes_count: 1243,
   },
   {
