@@ -21,6 +21,25 @@ export function contentFingerprint(title: string, body: string): string {
   return `${titleKey}::${bodyKey}`;
 }
 
+export function isTooSimilar(title: string, recentTitles: string[]): boolean {
+  const normalized = normalizeTitleKey(title);
+  if (!normalized) return true;
+
+  return recentTitles.some((recent) => {
+    const r = normalizeTitleKey(recent);
+    if (!r) return false;
+    if (r === normalized) return true;
+    if (r.includes(normalized) || normalized.includes(r)) return true;
+    const a = new Set(normalized.split(" "));
+    const b = new Set(r.split(" "));
+    let overlap = 0;
+    for (const w of a) {
+      if (w.length > 3 && b.has(w)) overlap++;
+    }
+    return overlap >= 4;
+  });
+}
+
 export function isDuplicateContent(
   title: string,
   body: string,
@@ -38,4 +57,19 @@ export function appendFingerprint(
   const fp = contentFingerprint(title, body);
   if (existing.includes(fp)) return existing;
   return [...existing, fp];
+}
+
+const BOILERPLATE_MARKERS = [
+  "most people overlook how",
+  "once you see it, you can't unsee it",
+  "here's the mechanism:",
+  "worth a minute before you scroll on",
+  "the weird truth about how",
+];
+
+/** Detect templated fallback posts that only swap the subject name. */
+export function isBoilerplatePost(title: string, body: string): boolean {
+  const combined = `${title} ${body}`.toLowerCase();
+  const hits = BOILERPLATE_MARKERS.filter((m) => combined.includes(m)).length;
+  return hits >= 2;
 }

@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   appendFingerprint,
   contentFingerprint,
+  isBoilerplatePost,
   isDuplicateContent,
 } from "@/lib/dedup";
 import { generatePost, type GeneratedPost } from "@/lib/grok";
@@ -266,7 +267,10 @@ async function createUniquePost(
       attempt
     );
 
-    if (isDuplicateContent(post.title, post.body, fingerprints)) {
+    if (
+      isBoilerplatePost(post.title, post.body) ||
+      isDuplicateContent(post.title, post.body, fingerprints)
+    ) {
       titles = [...titles, post.title];
       fingerprints = appendFingerprint(fingerprints, post.title, post.body);
       continue;
