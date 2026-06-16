@@ -17,7 +17,10 @@ import { personaToAuthorFields } from "@/lib/post-author";
 import { attachPostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
-import { pickConcreteSubject } from "@/lib/topic-subjects";
+import {
+  discoverConcreteSubject,
+  prefetchSubjectsForTopic,
+} from "@/lib/subject-discovery";
 import {
   type FeedStyle,
   type Post,
@@ -28,7 +31,7 @@ import {
 
 const MIN_ONBOARDING_TOPICS = 3;
 const MAX_ONBOARDING_TOPICS = 8;
-const MAX_DEDUP_RETRIES = 1;
+const MAX_DEDUP_RETRIES = 2;
 
 async function requireUser() {
   const supabase = await createClient();
@@ -210,6 +213,7 @@ async function insertGeneratedPost(
   const imageCtx = {
     topic: post.topic,
     title: post.title,
+    body: post.body,
     links: post.links,
     wiki_terms: post.wiki_terms,
   };
@@ -278,6 +282,18 @@ async function createUniquePost(
       pickRotatingTopic(options.topicNames, options.postCount + attempt);
     const subjectIndex = options.postCount + attempt;
 
+    const concreteSubject = focusTopic
+      ? await discoverConcreteSubject({
+          topic: focusTopic,
+          subjectIndex,
+          recentTitles: titles,
+        })
+      : undefined;
+
+    if (focusTopic) {
+      prefetchSubjectsForTopic(focusTopic, titles);
+    }
+
     const post = await generatePost(
       {
         prompt: options.prompt,
@@ -286,9 +302,7 @@ async function createUniquePost(
         recentTitles: titles,
         recentFingerprints: fingerprints,
         focusTopic,
-        concreteSubject: focusTopic
-          ? pickConcreteSubject(focusTopic, subjectIndex)
-          : undefined,
+        concreteSubject,
         subjectIndex,
       },
       attempt

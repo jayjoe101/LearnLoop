@@ -1,17 +1,20 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchRelevantImage, type ImageContext } from "@/lib/images";
+import {
+  fetchValidatedPostImage,
+  type PostImageContext,
+} from "@/lib/image-relevance";
 
-const SYNC_IMAGE_WAIT_MS = 1_000;
+const SYNC_IMAGE_WAIT_MS = 2_500;
 
-/** Fetch image on the hot path (brief wait), then finish in background with the same client. */
+/** Vision-validated image attach — brief sync wait, then background finish. */
 export async function attachPostImage(
   supabase: SupabaseClient,
   postId: string,
-  ctx: ImageContext
+  ctx: PostImageContext
 ): Promise<string | null> {
-  const imagePromise = fetchRelevantImage(ctx);
+  const imagePromise = fetchValidatedPostImage(ctx);
 
   const image = await Promise.race([
     imagePromise,

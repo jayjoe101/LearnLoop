@@ -1,7 +1,7 @@
 import { isTooSimilar } from "@/lib/dedup";
 import { finalizePostLinks } from "@/lib/post-content";
 import type { Persona } from "@/lib/personas";
-import { pickConcreteSubject } from "@/lib/topic-subjects";
+import { discoverConcreteSubject } from "@/lib/subject-discovery";
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
 export type FallbackPostInput = {
@@ -19,6 +19,7 @@ export type FallbackPost = {
   links: PostLink[];
   wiki_terms: PostWikiTerm[];
   persona: Persona;
+  subject: string;
 };
 
 const WIKI_TERM_OVERRIDES: [RegExp, string][] = [
@@ -115,15 +116,19 @@ const BODY_BUILDERS = [
     `**[[${wiki}]]** has a reputation problem: people treat it like trivia instead of a tool.\n\n${capitalizeSubject(subject)}. The practical takeaway is ==smaller than a lecture but more useful than an overview==.`,
 ];
 
-export function buildVariedFallbackPost(
+export async function buildVariedFallbackPost(
   input: FallbackPostInput,
   persona: Persona,
   variant: number
-): FallbackPost {
+): Promise<FallbackPost> {
   const focus = pickFocusTopic(input.topics, input.focusTopic);
   const subject =
     input.concreteSubject ??
-    pickConcreteSubject(focus, input.subjectIndex ?? variant);
+    (await discoverConcreteSubject({
+      topic: focus,
+      subjectIndex: input.subjectIndex ?? variant,
+      recentTitles: input.recentTitles,
+    }));
   const wikiTerm = extractPrimaryWikiTerm(subject);
   const hook = extractHook(subject);
   const recentTitles = input.recentTitles ?? [];
@@ -146,5 +151,6 @@ export function buildVariedFallbackPost(
     links: finalizePostLinks([], wikiTerm, wiki_terms),
     wiki_terms,
     persona,
+    subject,
   };
 }

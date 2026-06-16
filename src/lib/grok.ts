@@ -4,11 +4,11 @@ import {
   isTooSimilar,
 } from "@/lib/dedup";
 import { buildVariedFallbackPost } from "@/lib/fallback-post";
+import { validateGeneratedPost } from "@/lib/post-quality";
 import { pickRandomPersona, type Persona } from "@/lib/personas";
-import {
-  isMetaTopicPost,
-  pickConcreteSubject,
-} from "@/lib/topic-subjects";
+import { discoverConcreteSubject } from "@/lib/subject-discovery";
+import { isMetaTopicPost } from "@/lib/topic-subjects";
+import { FAST_MODEL } from "@/lib/xai-client";
 import {
   enrichBodyWithWikiTerms,
   finalizePostLinks,
@@ -17,16 +17,8 @@ import {
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 9_000;
-const AI_TRIES_BEFORE_FALLBACK = 2;
-const MAX_MODEL_ATTEMPTS = 2;
-
-const MODELS = [
-  process.env.XAI_MODEL,
-  "grok-4-fast-non-reasoning",
-  "grok-3-mini-fast",
-  "grok-3-mini",
-].filter((m, i, a): m is string => Boolean(m) && a.indexOf(m) === i);
+const XAI_TIMEOUT_MS = 14_000;
+const MAX_GENERATION_ATTEMPTS = 3;
 
 const POST_SCHEMA = {
   type: "object",
@@ -91,6 +83,8 @@ export type GeneratePostInput = {
   focusTopic?: string;
   concreteSubject?: string;
   subjectIndex?: number;
+  qualityFeedback?: string;
+  usedSubjects?: string[];
 };
 
 export type GeneratedPost = {
@@ -100,6 +94,7 @@ export type GeneratedPost = {
   links: PostLink[];
   wiki_terms: PostWikiTerm[];
   persona: Persona;
+  subject: string;
 };
 
 function pickFocusTopic(topics: string[], explicit?: string): string {
@@ -111,12 +106,10 @@ function pickFocusTopic(topics: string[], explicit?: string): string {
 function buildMessages(
   input: GeneratePostInput,
   persona: Persona,
+  subject: string,
   attempt: number
 ) {
   const focus = pickFocusTopic(input.topics, input.focusTopic);
-  const subject =
-    input.concreteSubject ??
-    pickConcreteSubject(focus, input.subjectIndex ?? attempt);
   const interests =
     input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
   const avoid = input.recentTitles?.length
@@ -138,6 +131,10 @@ function buildMessages(
     ? "Technical: 2-4 [[wiki-linked]] terms, precise mechanisms."
     : "Include [[wiki-linked]] terms where helpful.";
 
+  const qualityHint = input.qualityFeedback
+    ? `FIX THESE ISSUES FROM LAST DRAFT: ${input.qualityFeedback}`
+    : "";
+
   const retryHint =
     attempt > 0
       ? "RETRY: completely different angle, title, and body."
@@ -151,13 +148,13 @@ Write in this persona's voice only. Teach something specific.
 ${scopeRule}
 Title: clickbait about the SPECIFIC SUBJECT only.
 Format body with **bold**, *italic*, and ==highlight== markdown for a rich reading experience.
-${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${retryHint}`.trim(),
+${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${qualityHint} ${retryHint}`.trim(),
     },
     {
       role: "user" as const,
       content: `Interest areas: ${interests}
 Interest tag: ${focus}
-Specific subject: ${subject}
+Specific subject (required): ${subject}
 
 Avoid these titles:
 ${avoid}
@@ -169,29 +166,9 @@ ${task}`,
 
 async function requestPost(
   apiKey: string,
-  model: string,
   messages: ReturnType<typeof buildMessages>,
-  temperature: number,
-  strict: boolean
+  temperature: number
 ): Promise<Response> {
-  const body: Record<string, unknown> = {
-    model,
-    messages,
-    temperature,
-    max_tokens: strict ? 320 : 400,
-  };
-
-  if (strict) {
-    body.response_format = {
-      type: "json_schema",
-      json_schema: {
-        name: "insight_post",
-        schema: POST_SCHEMA,
-        strict: true,
-      },
-    };
-  }
-
   return fetch(XAI_API_URL, {
     method: "POST",
     headers: {
@@ -199,13 +176,27 @@ async function requestPost(
       Authorization: `Bearer ${apiKey}`,
     },
     signal: AbortSignal.timeout(XAI_TIMEOUT_MS),
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      model: FAST_MODEL,
+      messages,
+      temperature,
+      max_tokens: 520,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "insight_post",
+          schema: POST_SCHEMA,
+          strict: true,
+        },
+      },
+    }),
   });
 }
 
 function parseGeneratedContent(
   content: string,
-  input: GeneratePostInput
+  input: GeneratePostInput,
+  subject: string
 ): Omit<GeneratedPost, "persona"> | null {
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   const jsonText = jsonMatch?.[0] ?? content;
@@ -223,6 +214,7 @@ function parseGeneratedContent(
   const body = parsed.body.trim();
   const topic =
     parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic);
+  const resolvedSubject = parsed.subject?.trim() || subject;
 
   if (body.length < 80) return null;
   if (isTooSimilar(title, input.recentTitles ?? [])) return null;
@@ -236,7 +228,7 @@ function parseGeneratedContent(
   );
   const links = finalizePostLinks(
     parsed.links as Array<{ label?: string; url?: string }> | undefined,
-    parsed.subject?.trim() || wiki_terms[0]?.term || topic,
+    resolvedSubject || wiki_terms[0]?.term || topic,
     wiki_terms
   );
 
@@ -248,6 +240,7 @@ function parseGeneratedContent(
     body: enrichBodyWithWikiTerms(body, wiki_terms),
     links,
     wiki_terms,
+    subject: resolvedSubject,
   };
 }
 
@@ -255,55 +248,27 @@ async function callXai(
   apiKey: string,
   input: GeneratePostInput,
   persona: Persona,
-  attempt: number,
-  strict: boolean
+  subject: string,
+  attempt: number
 ): Promise<GeneratedPost | null> {
-  const temperature = 0.75 + attempt * 0.08;
-  const baseMessages = buildMessages(input, persona, attempt);
-  const messages = strict
-    ? baseMessages
-    : [
-        ...baseMessages,
-        {
-          role: "user" as const,
-          content:
-            "Return ONLY valid JSON with keys: topic, subject, title, body, links [{label,url}], wiki_terms [{term}].",
-        },
-      ];
+  const temperature = 0.72 + attempt * 0.06;
+  const messages = buildMessages(input, persona, subject, attempt);
 
-  for (let i = 0; i < Math.min(MODELS.length, MAX_MODEL_ATTEMPTS); i++) {
-    const model = MODELS[i];
-    let response: Response;
-
-    try {
-      response = await requestPost(
-        apiKey,
-        model,
-        messages,
-        temperature,
-        strict
-      );
-    } catch {
-      if (i < MODELS.length - 1) continue;
-      return null;
-    }
-
-    if (!response.ok) {
-      if (response.status === 400 || response.status === 404) continue;
-      return null;
-    }
+  try {
+    const response = await requestPost(apiKey, messages, temperature);
+    if (!response.ok) return null;
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content as string | undefined;
-    if (!content) continue;
+    if (!content) return null;
 
-    const result = parseGeneratedContent(content, input);
-    if (!result) continue;
+    const result = parseGeneratedContent(content, input, subject);
+    if (!result) return null;
 
     return { ...result, persona };
+  } catch {
+    return null;
   }
-
-  return null;
 }
 
 export async function generatePost(
@@ -314,38 +279,64 @@ export async function generatePost(
   const recentTitles = input.recentTitles ?? [];
   const recentFingerprints = input.recentFingerprints ?? [];
   const variant = (input.subjectIndex ?? 0) + attempt;
+  const focus = pickFocusTopic(input.topics, input.focusTopic);
+
+  const subject =
+    input.concreteSubject?.trim() ||
+    (await discoverConcreteSubject({
+      topic: focus,
+      subjectIndex: input.subjectIndex ?? attempt,
+      recentTitles,
+      usedSubjects: input.usedSubjects,
+    }));
+
+  const baseInput: GeneratePostInput = {
+    ...input,
+    focusTopic: focus,
+    concreteSubject: subject,
+  };
 
   if (apiKey) {
-    for (let aiTry = 0; aiTry < AI_TRIES_BEFORE_FALLBACK; aiTry++) {
+    let qualityFeedback = input.qualityFeedback;
+    const usedSubjects = [...(input.usedSubjects ?? []), subject];
+
+    for (let aiTry = 0; aiTry < MAX_GENERATION_ATTEMPTS; aiTry++) {
       const persona = pickRandomPersona();
-      const tryAttempt = attempt + aiTry;
+      const tryInput = { ...baseInput, qualityFeedback, usedSubjects };
 
-      const strict = await callXai(apiKey, input, persona, tryAttempt, true);
-      if (strict && !isBoilerplatePost(strict.title, strict.body)) {
-        return strict;
+      const draft = await callXai(
+        apiKey,
+        tryInput,
+        persona,
+        subject,
+        attempt + aiTry
+      );
+
+      if (!draft || isBoilerplatePost(draft.title, draft.body)) continue;
+
+      const quality = await validateGeneratedPost({
+        topic: draft.topic,
+        subject: draft.subject,
+        title: draft.title,
+        body: draft.body,
+        wikiTerms: draft.wiki_terms,
+      });
+
+      if (!quality.pass) {
+        qualityFeedback = quality.issues.join("; ");
+        continue;
       }
 
-      if (aiTry === AI_TRIES_BEFORE_FALLBACK - 1) {
-        const relaxed = await callXai(
-          apiKey,
-          input,
-          pickRandomPersona(),
-          tryAttempt,
-          false
-        );
-        if (relaxed && !isBoilerplatePost(relaxed.title, relaxed.body)) {
-          return relaxed;
-        }
-      }
+      return draft;
     }
   }
 
   for (let fb = 0; fb < 4; fb++) {
-    const fallback = buildVariedFallbackPost(
+    const fallback = await buildVariedFallbackPost(
       {
         topics: input.topics,
-        focusTopic: input.focusTopic,
-        concreteSubject: input.concreteSubject,
+        focusTopic: focus,
+        concreteSubject: subject,
         subjectIndex: input.subjectIndex,
         recentTitles,
       },
@@ -365,8 +356,8 @@ export async function generatePost(
   return buildVariedFallbackPost(
     {
       topics: input.topics,
-      focusTopic: input.focusTopic,
-      concreteSubject: input.concreteSubject,
+      focusTopic: focus,
+      concreteSubject: subject,
       subjectIndex: (input.subjectIndex ?? 0) + variant,
       recentTitles,
     },

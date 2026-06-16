@@ -113,7 +113,10 @@ async function fetchWikipediaImageByTitle(title: string): Promise<string | null>
   }
 }
 
-async function fetchWikipediaSearchImage(search: string): Promise<string | null> {
+async function fetchWikipediaSearchImages(
+  search: string,
+  limit = 3
+): Promise<string[]> {
   try {
     const params = new URLSearchParams({
       action: "query",
@@ -121,7 +124,7 @@ async function fetchWikipediaSearchImage(search: string): Promise<string | null>
       origin: "*",
       generator: "search",
       gsrsearch: search,
-      gsrlimit: "3",
+      gsrlimit: String(limit),
       prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: "900",
@@ -135,33 +138,60 @@ async function fetchWikipediaSearchImage(search: string): Promise<string | null>
       }
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) return [];
 
     const data = (await response.json()) as WikimediaResponse;
+    const urls: string[] = [];
+
     for (const page of Object.values(data.query?.pages ?? {})) {
       const src = page.thumbnail?.source;
-      if (src) return src;
+      if (src) urls.push(src);
     }
 
-    return null;
+    return urls;
   } catch {
-    return null;
+    return [];
   }
 }
 
-export async function fetchRelevantImage(ctx: ImageContext): Promise<string | null> {
-  const candidates = buildTitleCandidates(ctx).slice(0, 3);
+export async function fetchImageCandidates(
+  ctx: ImageContext,
+  limit = 4
+): Promise<string[]> {
+  const titles = buildTitleCandidates(ctx).slice(0, limit);
+  const fromTitles = await Promise.all(
+    titles.map((title) => fetchWikipediaImageByTitle(title))
+  );
 
-  if (candidates.length > 0) {
-    const parallel = await Promise.all(
-      candidates.map((title) => fetchWikipediaImageByTitle(title))
-    );
-    const hit = parallel.find(Boolean);
-    if (hit) return hit;
+  const seen = new Set<string>();
+  const urls: string[] = [];
+
+  for (const url of fromTitles) {
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
   }
 
-  const search = candidates[0] ?? ctx.topic;
-  return fetchWikipediaSearchImage(search);
+  if (urls.length < limit) {
+    const search = titles[0] ?? ctx.title ?? ctx.topic;
+    const fromSearch = await fetchWikipediaSearchImages(
+      search,
+      limit - urls.length
+    );
+    for (const url of fromSearch) {
+      if (!seen.has(url)) {
+        seen.add(url);
+        urls.push(url);
+      }
+    }
+  }
+
+  return urls.slice(0, limit);
+}
+
+export async function fetchRelevantImage(ctx: ImageContext): Promise<string | null> {
+  const candidates = await fetchImageCandidates(ctx, 3);
+  return candidates[0] ?? null;
 }
 
 export async function resolvePostImage(
