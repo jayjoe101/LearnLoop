@@ -1,3 +1,4 @@
+import { isDuplicateContent, normalizeTitleKey } from "@/lib/dedup";
 import { pickRandomPersona, type Persona } from "@/lib/personas";
 import {
   enrichBodyWithWikiTerms,
@@ -7,14 +8,12 @@ import {
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 9_000;
-const MAX_ATTEMPTS = 2;
+const XAI_TIMEOUT_MS = 8_000;
 
 const MODELS = [
   process.env.XAI_MODEL,
   "grok-4-fast-non-reasoning",
   "grok-3-mini-fast",
-  "grok-3-mini",
 ].filter((m, i, a): m is string => Boolean(m) && a.indexOf(m) === i);
 
 const STYLE_GUIDE: Record<FeedStyle, string> = {
@@ -80,6 +79,7 @@ export type GeneratePostInput = {
   topics: string[];
   style: FeedStyle;
   recentTitles?: string[];
+  recentFingerprints?: string[];
   focusTopic?: string;
 };
 
@@ -92,20 +92,12 @@ export type GeneratedPost = {
   persona: Persona;
 };
 
-function normalizeTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^\w\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function isTooSimilar(title: string, recentTitles: string[]): boolean {
-  const normalized = normalizeTitle(title);
+  const normalized = normalizeTitleKey(title);
   if (!normalized) return true;
 
   return recentTitles.some((recent) => {
-    const r = normalizeTitle(recent);
+    const r = normalizeTitleKey(recent);
     if (!r) return false;
     if (r === normalized) return true;
     if (r.includes(normalized) || normalized.includes(r)) return true;
@@ -134,8 +126,11 @@ function buildMessages(
   const interests =
     input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
   const avoid = input.recentTitles?.length
-    ? input.recentTitles.slice(0, 8).map((t) => `- ${t}`).join("\n")
+    ? input.recentTitles.slice(0, 6).map((t) => `- ${t}`).join("\n")
     : "None yet.";
+  const dupHint = input.recentFingerprints?.length
+    ? "Do NOT reuse the same insight, facts, or wording as any recent post — must be a genuinely different angle."
+    : "";
 
   const task =
     input.prompt?.trim() ||
@@ -149,7 +144,7 @@ function buildMessages(
 
   const retryHint =
     attempt > 0
-      ? "Retry: different angle and title than before."
+      ? "RETRY: completely different topic angle, title, and body — zero overlap with prior attempt."
       : "";
 
   return [
@@ -158,13 +153,13 @@ function buildMessages(
       content: `${persona.name} (${persona.role}) on InsightScroll as ${persona.handle}. ${persona.voice}
 Tone: ${STYLE_GUIDE[input.style]}. Teach something specific — no generic fluff.
 Title: premium clickbait about the real topic — make readers NEED to click.
-${technicalHint} Include 1-3 real links (Wikipedia for core subject). ${retryHint}`.trim(),
+${technicalHint} Include 1-3 real links (Wikipedia for core subject). ${dupHint} ${retryHint}`.trim(),
     },
     {
       role: "user" as const,
       content: `Interests: ${interests}
 Focus: ${focus}
-Avoid repeating these titles:
+Avoid these titles (and do not rewrite the same post with different wording):
 ${avoid}
 
 ${task}`,
@@ -222,6 +217,11 @@ function parseGeneratedContent(
 
   if (body.length < 80) return null;
   if (isTooSimilar(title, input.recentTitles ?? [])) return null;
+  if (
+    isDuplicateContent(title, body, input.recentFingerprints ?? [])
+  ) {
+    return null;
+  }
 
   const wiki_terms = normalizeWikiTerms(
     parsed.wiki_terms as Array<{ term?: string }> | undefined
@@ -280,20 +280,28 @@ async function callXaiOnce(
 }
 
 export async function generatePost(
-  input: GeneratePostInput
+  input: GeneratePostInput,
+  attempt = 0
 ): Promise<GeneratedPost> {
   const apiKey = process.env.XAI_API_KEY;
   const recentTitles = input.recentTitles ?? [];
+  const recentFingerprints = input.recentFingerprints ?? [];
   const persona = pickRandomPersona();
 
   if (apiKey) {
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const result = await callXaiOnce(apiKey, input, persona, attempt);
-      if (result) return result;
-    }
+    const result = await callXaiOnce(apiKey, input, persona, attempt);
+    if (result) return result;
   }
 
-  return buildFallbackPost(input, recentTitles, persona);
+  const fallback = buildFallbackPost(input, recentTitles, persona);
+  if (isDuplicateContent(fallback.title, fallback.body, recentFingerprints)) {
+    return buildFallbackPost(
+      { ...input, focusTopic: `${input.focusTopic ?? "insight"}-${attempt + 1}` },
+      [...recentTitles, fallback.title],
+      pickRandomPersona()
+    );
+  }
+  return fallback;
 }
 
 function buildFallbackPost(

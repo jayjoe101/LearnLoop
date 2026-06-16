@@ -1,13 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { generatePost } from "@/lib/grok";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  appendFingerprint,
+  contentFingerprint,
+  isDuplicateContent,
+} from "@/lib/dedup";
+import { generatePost, type GeneratedPost } from "@/lib/grok";
 import {
   fetchGenerationContext,
   pickRotatingTopic,
 } from "@/lib/generation-context";
 import { personaToAuthorFields } from "@/lib/post-author";
-import { resolvePostImage } from "@/lib/images";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -20,6 +25,7 @@ import {
 
 const MIN_ONBOARDING_TOPICS = 3;
 const MAX_ONBOARDING_TOPICS = 8;
+const MAX_DEDUP_RETRIES = 2;
 
 async function requireUser() {
   const supabase = await createClient();
@@ -138,46 +144,64 @@ export async function completeOnboarding(
 
   if (profileError) return { error: profileError.message };
 
-  await Promise.all(
-    [0, 1].map((i) =>
-      generateNewPostForUser(user.id, unique, feedStyle, {
-        focusTopic: pickRotatingTopic(unique, i),
-      })
-    )
-  );
+  let recentTitles: string[] = [];
+  let recentFingerprints: string[] = [];
+
+  for (let i = 0; i < 2; i++) {
+    const created = await createUniquePost(await createClient(), user.id, {
+      topicNames: unique,
+      style: feedStyle,
+      recentTitles,
+      recentFingerprints,
+      focusTopic: pickRotatingTopic(unique, i),
+      postCount: i,
+    });
+
+    if (created) {
+      recentTitles = [...recentTitles, created.title];
+      recentFingerprints = appendFingerprint(
+        recentFingerprints,
+        created.title,
+        created.body
+      );
+    }
+  }
 
   revalidatePath("/");
   return { success: true };
 }
 
-async function generateNewPostForUser(
+async function postExistsForUser(
+  supabase: SupabaseClient,
   userId: string,
-  topicNames: string[],
-  style: FeedStyle,
-  options?: {
-    prompt?: string;
-    recentTitles?: string[];
-    focusTopic?: string;
-    onCreated?: (title: string) => void;
-  }
-) {
-  const supabase = await createClient();
+  title: string,
+  body: string
+): Promise<boolean> {
+  const fp = contentFingerprint(title, body);
+  const { data } = await supabase
+    .from("posts")
+    .select("title, body")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
 
-  const post = await generatePost({
-    prompt: options?.prompt,
-    topics: topicNames,
-    style,
-    recentTitles: options?.recentTitles ?? [],
-    focusTopic: options?.focusTopic,
-  });
+  return (data ?? []).some(
+    (row) => contentFingerprint(row.title, row.body) === fp
+  );
+}
 
+async function insertGeneratedPost(
+  supabase: SupabaseClient,
+  userId: string,
+  post: GeneratedPost,
+  prompt: string | null
+): Promise<string | null> {
   const imageCtx = {
     topic: post.topic,
     title: post.title,
     links: post.links,
     wiki_terms: post.wiki_terms,
   };
-  const imageUrl = await resolvePostImage(imageCtx);
 
   const { data: inserted, error } = await supabase
     .from("posts")
@@ -186,21 +210,76 @@ async function generateNewPostForUser(
       topic: post.topic,
       title: post.title,
       body: post.body,
-      image_url: imageUrl,
+      image_url: null,
       links: post.links,
       wiki_terms: post.wiki_terms,
       likes_count: 300 + Math.floor(Math.random() * 500),
       source: "grok",
-      prompt: options?.prompt ?? null,
+      prompt,
       ...personaToAuthorFields(post.persona),
     })
     .select("id")
     .single();
 
-  if (!error && inserted?.id) {
-    options?.onCreated?.(post.title);
-    schedulePostImage(inserted.id, imageCtx, imageUrl);
+  if (error || !inserted?.id) return null;
+
+  schedulePostImage(inserted.id, imageCtx, null);
+  return inserted.id;
+}
+
+async function createUniquePost(
+  supabase: SupabaseClient,
+  userId: string,
+  options: {
+    topicNames: string[];
+    style: FeedStyle;
+    recentTitles: string[];
+    recentFingerprints: string[];
+    focusTopic?: string;
+    postCount: number;
+    prompt?: string;
   }
+): Promise<GeneratedPost | null> {
+  let titles = [...options.recentTitles];
+  let fingerprints = [...options.recentFingerprints];
+
+  for (let attempt = 0; attempt < MAX_DEDUP_RETRIES; attempt++) {
+    const post = await generatePost(
+      {
+        prompt: options.prompt,
+        topics: options.topicNames,
+        style: options.style,
+        recentTitles: titles,
+        recentFingerprints: fingerprints,
+        focusTopic:
+          options.focusTopic ??
+          pickRotatingTopic(options.topicNames, options.postCount + attempt),
+      },
+      attempt
+    );
+
+    if (isDuplicateContent(post.title, post.body, fingerprints)) {
+      titles = [...titles, post.title];
+      fingerprints = appendFingerprint(fingerprints, post.title, post.body);
+      continue;
+    }
+
+    if (await postExistsForUser(supabase, userId, post.title, post.body)) {
+      titles = [...titles, post.title];
+      fingerprints = appendFingerprint(fingerprints, post.title, post.body);
+      continue;
+    }
+
+    const id = await insertGeneratedPost(
+      supabase,
+      userId,
+      post,
+      options.prompt ?? null
+    );
+    if (id) return post;
+  }
+
+  return null;
 }
 
 export async function addTopic(name: string) {
@@ -246,52 +325,63 @@ export async function generateNewPost(prompt?: string) {
   const style =
     (profile.feed_style as FeedStyle) ?? "Balanced & insightful";
 
-  const post = await generatePost({
-    prompt,
-    topics: ctx.topicNames,
+  const created = await createUniquePost(supabase, user.id, {
+    topicNames: ctx.topicNames,
     style,
     recentTitles: ctx.recentTitles,
+    recentFingerprints: ctx.recentFingerprints,
     focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount),
+    postCount: ctx.postCount,
+    prompt,
   });
 
-  const imageCtx = {
-    topic: post.topic,
-    title: post.title,
-    links: post.links,
-    wiki_terms: post.wiki_terms,
-  };
-  const imageUrl = await resolvePostImage(imageCtx);
-
-  const { data: inserted, error } = await supabase
-    .from("posts")
-    .insert({
-      user_id: user.id,
-      topic: post.topic,
-      title: post.title,
-      body: post.body,
-      image_url: imageUrl,
-      links: post.links,
-      wiki_terms: post.wiki_terms,
-      likes_count: 300 + Math.floor(Math.random() * 500),
-      source: "grok",
-      prompt: prompt ?? null,
-      ...personaToAuthorFields(post.persona),
-    })
-    .select("id")
-    .single();
-
-  if (error) return { error: error.message };
-
-  if (inserted?.id) {
-    schedulePostImage(inserted.id, imageCtx, imageUrl);
-  }
+  if (!created) return { error: "Could not generate a unique post" };
 
   revalidatePath("/");
   return { success: true };
 }
 
 export async function loadMorePosts(count = 2) {
-  await Promise.all(Array.from({ length: count }, () => generateNewPost()));
+  const { supabase, user } = await requireUser();
+
+  const [{ data: profile }, ctx] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("feed_style, onboarding_completed")
+      .eq("id", user.id)
+      .single(),
+    fetchGenerationContext(supabase, user.id),
+  ]);
+
+  if (!profile?.onboarding_completed) return;
+
+  const style =
+    (profile.feed_style as FeedStyle) ?? "Balanced & insightful";
+
+  let recentTitles = ctx.recentTitles;
+  let recentFingerprints = ctx.recentFingerprints;
+
+  for (let i = 0; i < count; i++) {
+    const created = await createUniquePost(supabase, user.id, {
+      topicNames: ctx.topicNames,
+      style,
+      recentTitles,
+      recentFingerprints,
+      focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount + i),
+      postCount: ctx.postCount + i,
+    });
+
+    if (created) {
+      recentTitles = [...recentTitles, created.title];
+      recentFingerprints = appendFingerprint(
+        recentFingerprints,
+        created.title,
+        created.body
+      );
+    }
+  }
+
+  revalidatePath("/");
 }
 
 export async function likePost(postId: string) {
@@ -448,8 +538,6 @@ export async function refreshFeed() {
     await supabase.from("posts").delete().in("id", deleteIds);
   }
 
-  await generateNewPost();
-  await generateNewPost();
-  revalidatePath("/");
+  await loadMorePosts(2);
   return { kept: keepIds.length };
 }
