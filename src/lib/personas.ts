@@ -10,8 +10,8 @@ export type Persona = {
 export const PERSONAS: Persona[] = [
   {
     id: "researcher",
-    name: "Dr. Mara Okonkwo",
-    handle: "@lab_notes",
+    name: "Dr. Hugh Mann",
+    handle: "@peer_reviewed_blue",
     role: "Researcher",
     accent: "#6366f1",
     voice:
@@ -19,8 +19,8 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "everyday",
-    name: "Jordan Kim",
-    handle: "@jordan",
+    name: "Curious George (Not That One)",
+    handle: "@just_google_it",
     role: "Everyday learner",
     accent: "#22c55e",
     voice:
@@ -28,7 +28,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "journalist",
-    name: "Alex Chen",
+    name: "Breaking News McFixface",
     handle: "@field_report",
     role: "Journalist",
     accent: "#f59e0b",
@@ -37,7 +37,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "philosopher",
-    name: "Prof. Iris Holt",
+    name: "Plato's Plato",
     handle: "@first_principles",
     role: "Philosopher",
     accent: "#a78bfa",
@@ -46,8 +46,8 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "engineer",
-    name: "Sam Rivera",
-    handle: "@systems_view",
+    name: "Bolt Vanderbuilt",
+    handle: "@works_on_my_machine",
     role: "Engineer",
     accent: "#06b6d4",
     voice:
@@ -55,7 +55,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "historian",
-    name: "Dr. James Whitfield",
+    name: "Sir Loin of Past",
     handle: "@archive_thread",
     role: "Historian",
     accent: "#d97706",
@@ -64,7 +64,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "skeptic",
-    name: "Riley Park",
+    name: "Mythy McMythface",
     handle: "@wait_actually",
     role: "Skeptic",
     accent: "#ef4444",
@@ -73,7 +73,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "storyteller",
-    name: "Nova Ellis",
+    name: "Plot Twist Pete",
     handle: "@story_seed",
     role: "Storyteller",
     accent: "#ec4899",
@@ -82,7 +82,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "coach",
-    name: "Coach Tiana Brooks",
+    name: "Hype Man Stan",
     handle: "@one_step",
     role: "Coach",
     accent: "#14b8a6",
@@ -91,7 +91,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "explorer",
-    name: "Milo Tanaka",
+    name: "Wiki Rabbit Warren",
     handle: "@rabbit_hole",
     role: "Deep diver",
     accent: "#8b5cf6",
@@ -109,9 +109,19 @@ export function getPersonaById(id: string): Persona | undefined {
 }
 
 export function getAuthorInitials(name: string): string {
-  const parts = name.replace(/^(Dr\.|Prof\.|Coach)\s+/i, "").split(/\s+/);
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  const words = name
+    .replace(/[()[\]'"]/g, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, ""))
+    .filter((w) => w.length > 0 && !/^(dr|prof|coach|sir|not|that|one)$/i.test(w));
+
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
   }
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
   return name.slice(0, 2).toUpperCase();
 }

@@ -3,7 +3,7 @@ import type { FeedStyle } from "@/lib/types";
 const TECH_PERSONA_IDS = new Set([
   "researcher",
   "engineer",
-  "deep-diver",
+  "explorer",
   "skeptic",
   "historian",
 ]);

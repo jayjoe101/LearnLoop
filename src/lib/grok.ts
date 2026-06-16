@@ -38,7 +38,7 @@ const POST_SCHEMA = {
     title: {
       type: "string",
       description:
-        "Unique, specific headline under 90 characters. Never generic or clickbait.",
+        "Scroll-stopping headline under 90 characters. Clickbait-curious and irresistibly engaging about the ACTUAL topic — curiosity gap, bold claim, or 'wait, what?' hook. Must make the reader desperate to learn more. Honest, not misleading.",
     },
     body: {
       type: "string",
@@ -48,7 +48,7 @@ const POST_SCHEMA = {
     links: {
       type: "array",
       description:
-        "1-3 real, reputable external sources (news, papers, docs, .edu, .gov). Full https URLs only.",
+        "1-3 real, reputable external sources. ALWAYS include at least one en.wikipedia.org/wiki/... URL about the core subject. Add news, papers, or docs when relevant. Full https URLs only.",
       items: {
         type: "object",
         properties: {
@@ -153,7 +153,7 @@ function buildMessages(
 
   const technicalHint =
     input.style === "Deep technical" ||
-    ["researcher", "engineer", "deep-diver", "skeptic"].includes(persona.id)
+    ["researcher", "engineer", "explorer", "skeptic"].includes(persona.id)
       ? "This is a technical post: include 2-4 [[wiki-linked]] jargon terms and precise mechanisms."
       : "Include at least 1 [[wiki-linked]] term when a concept benefits from a quick definition.";
 
@@ -164,8 +164,9 @@ function buildMessages(
 ${persona.voice}
 Feed tone setting: ${STYLE_GUIDE[input.style]}
 Every post must teach something specific. Ban generic self-help and recycled ideas.
+TITLE RULE: Write headlines that feel like premium clickbait about the real topic — punchy, provocative, specific. Think "I NEED to know this" not "here is an overview of X".
 ${technicalHint}
-Always attach 1-3 real external links readers can follow. Use [[term]] markers in the body for wiki highlights. ${varietyHint}`.trim(),
+Always attach 1-3 real external links. At least one MUST be a Wikipedia article URL for the main subject. Use [[term]] markers in the body for wiki highlights. ${varietyHint}`.trim(),
     },
     {
       role: "user" as const,
@@ -255,6 +256,11 @@ async function callXaiOnce(
 
     if (links.length === 0) continue;
 
+    const hasWikipediaLink = links.some((l) =>
+      l.url.includes("wikipedia.org/wiki/")
+    );
+    if (!hasWikipediaLink) continue;
+
     const enrichedBody = enrichBodyWithWikiTerms(body, wiki_terms);
 
     return {
@@ -307,10 +313,17 @@ function buildFallbackPost(
   const angle = angles[Math.floor(Math.random() * angles.length)];
   const stamp = Date.now().toString(36).slice(-4);
 
-  let title = `What ${focus} reveals about ${angle}`;
+  const hooks = [
+    `Your brain on ${focus} is not what you think`,
+    `The ${focus} trick experts quietly use`,
+    `Why ${focus} breaks every rule you learned`,
+    `${focus}: the part nobody talks about`,
+    `This ${focus} fact changes the whole game`,
+  ];
+  let title = hooks[Math.floor(Math.random() * hooks.length)];
   let tries = 0;
   while (isTooSimilar(title, recentTitles) && tries < 8) {
-    title = `${focus}: insight ${stamp}-${tries + 1}`;
+    title = `${focus} just got weird (${stamp}-${tries + 1})`;
     tries++;
   }
 

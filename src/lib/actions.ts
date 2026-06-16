@@ -172,7 +172,13 @@ async function generateNewPostForUser(
     focusTopic: options?.focusTopic,
   });
 
-  const imageUrl = await resolvePostImage(post.topic, post.title);
+  const imageCtx = {
+    topic: post.topic,
+    title: post.title,
+    links: post.links,
+    wiki_terms: post.wiki_terms,
+  };
+  const imageUrl = await resolvePostImage(imageCtx);
 
   const { data: inserted, error } = await supabase
     .from("posts")
@@ -195,7 +201,7 @@ async function generateNewPostForUser(
   if (!error && inserted?.id) {
     options?.onCreated?.(post.title);
     if (!imageUrl) {
-      schedulePostImage(inserted.id, post.topic, post.title);
+      schedulePostImage(inserted.id, imageCtx);
     }
   }
 }
@@ -251,7 +257,13 @@ export async function generateNewPost(prompt?: string) {
     focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount),
   });
 
-  const imageUrl = await resolvePostImage(post.topic, post.title);
+  const imageCtx = {
+    topic: post.topic,
+    title: post.title,
+    links: post.links,
+    wiki_terms: post.wiki_terms,
+  };
+  const imageUrl = await resolvePostImage(imageCtx);
 
   const { data: inserted, error } = await supabase
     .from("posts")
@@ -274,7 +286,7 @@ export async function generateNewPost(prompt?: string) {
   if (error) return { error: error.message };
 
   if (inserted?.id && !imageUrl) {
-    schedulePostImage(inserted.id, post.topic, post.title);
+    schedulePostImage(inserted.id, imageCtx);
   }
 
   revalidatePath("/");

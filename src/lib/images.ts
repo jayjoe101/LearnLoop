@@ -1,47 +1,96 @@
-const WIKIMEDIA_TIMEOUT_MS = 3_000;
-const SYNC_IMAGE_BUDGET_MS = 2_800;
+import type { PostLink, PostWikiTerm } from "@/lib/types";
+
+const WIKIMEDIA_TIMEOUT_MS = 3_500;
+const SYNC_IMAGE_BUDGET_MS = 3_200;
+
+export type ImageContext = {
+  topic: string;
+  title: string;
+  links?: PostLink[];
+  wiki_terms?: PostWikiTerm[];
+};
 
 type WikimediaResponse = {
   query?: {
     pages?: Record<
       string,
-      { thumbnail?: { source?: string }; title?: string }
+      {
+        thumbnail?: { source?: string };
+        title?: string;
+        missing?: boolean;
+      }
     >;
   };
 };
 
-export function buildImageSearchQueries(topic: string, title: string): string[] {
-  const titleWords = title
-    .replace(/[^\w\s]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 2)
-    .slice(0, 5)
-    .join(" ");
-
-  const topicWords = topic.replace(/[^\w\s]/g, " ").trim();
-
-  return [...new Set([`${topicWords} ${titleWords}`.trim(), topicWords, titleWords])].filter(
-    Boolean
-  );
+function decodeWikiTitle(segment: string): string {
+  return decodeURIComponent(segment.replace(/_/g, " ")).trim();
 }
 
-async function fetchCommonsImage(search: string): Promise<string | null> {
+/** Pull exact article titles from Wikipedia / Grokipedia URLs in post sources. */
+export function extractArticleTitlesFromLinks(links: PostLink[] = []): string[] {
+  const titles: string[] = [];
+  const seen = new Set<string>();
+
+  for (const link of links) {
+    try {
+      const url = new URL(link.url);
+      const host = url.hostname.replace(/^www\./, "");
+      let title: string | null = null;
+
+      if (host.endsWith("wikipedia.org") && url.pathname.startsWith("/wiki/")) {
+        title = decodeWikiTitle(url.pathname.slice("/wiki/".length));
+      } else if (host === "grokipedia.com" && url.pathname.startsWith("/page/")) {
+        title = decodeWikiTitle(url.pathname.slice("/page/".length));
+      }
+
+      if (!title || title.toLowerCase() === "main page") continue;
+
+      const key = title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      titles.push(title);
+    } catch {
+      // skip invalid URLs
+    }
+  }
+
+  return titles;
+}
+
+function buildTitleCandidates(ctx: ImageContext): string[] {
+  const fromLinks = extractArticleTitlesFromLinks(ctx.links);
+  const fromWikiTerms = (ctx.wiki_terms ?? [])
+    .map((t) => t.term.trim())
+    .filter(Boolean);
+  const topic = ctx.topic.replace(/[^\w\s&+-]/g, " ").trim();
+
+  const candidates = [...fromLinks, ...fromWikiTerms, topic];
+
+  const seen = new Set<string>();
+  return candidates.filter((c) => {
+    const key = c.toLowerCase();
+    if (!c || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function fetchWikipediaImageByTitle(title: string): Promise<string | null> {
   try {
     const params = new URLSearchParams({
       action: "query",
       format: "json",
       origin: "*",
-      generator: "search",
-      gsrsearch: `filetype:bitmap ${search}`,
-      gsrnamespace: "6",
-      gsrlimit: "5",
+      titles: title,
       prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: "900",
+      redirects: "1",
     });
 
     const response = await fetch(
-      `https://commons.wikimedia.org/w/api.php?${params}`,
+      `https://en.wikipedia.org/w/api.php?${params}`,
       {
         signal: AbortSignal.timeout(WIKIMEDIA_TIMEOUT_MS),
         next: { revalidate: 86400 },
@@ -52,6 +101,7 @@ async function fetchCommonsImage(search: string): Promise<string | null> {
 
     const data = (await response.json()) as WikimediaResponse;
     for (const page of Object.values(data.query?.pages ?? {})) {
+      if (page.missing) continue;
       const src = page.thumbnail?.source;
       if (src) return src;
     }
@@ -62,7 +112,7 @@ async function fetchCommonsImage(search: string): Promise<string | null> {
   }
 }
 
-async function fetchWikipediaArticleImage(search: string): Promise<string | null> {
+async function fetchWikipediaSearchImage(search: string): Promise<string | null> {
   try {
     const params = new URLSearchParams({
       action: "query",
@@ -70,7 +120,7 @@ async function fetchWikipediaArticleImage(search: string): Promise<string | null
       origin: "*",
       generator: "search",
       gsrsearch: search,
-      gsrlimit: "3",
+      gsrlimit: "4",
       prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: "900",
@@ -98,32 +148,39 @@ async function fetchWikipediaArticleImage(search: string): Promise<string | null
   }
 }
 
-export async function fetchRelevantImage(
-  topic: string,
-  title: string
-): Promise<string | null> {
-  const queries = buildImageSearchQueries(topic, title);
+export async function fetchRelevantImage(ctx: ImageContext): Promise<string | null> {
+  const candidates = buildTitleCandidates(ctx);
 
-  for (const query of queries) {
-    const commons = await fetchCommonsImage(query);
-    if (commons) return commons;
+  for (const title of candidates) {
+    const direct = await fetchWikipediaImageByTitle(title);
+    if (direct) return direct;
   }
 
-  for (const query of queries) {
-    const wiki = await fetchWikipediaArticleImage(query);
-    if (wiki) return wiki;
+  const searchQueries = [
+    ctx.topic,
+    candidates[0],
+    `${ctx.topic} ${(ctx.wiki_terms ?? [])[0]?.term ?? ""}`.trim(),
+  ].filter(Boolean);
+
+  const seenQueries = new Set<string>();
+  for (const query of searchQueries) {
+    const key = query.toLowerCase();
+    if (seenQueries.has(key)) continue;
+    seenQueries.add(key);
+
+    const found = await fetchWikipediaSearchImage(query);
+    if (found) return found;
   }
 
   return null;
 }
 
 export async function resolvePostImage(
-  topic: string,
-  title: string,
+  ctx: ImageContext,
   budgetMs = SYNC_IMAGE_BUDGET_MS
 ): Promise<string | null> {
   return Promise.race([
-    fetchRelevantImage(topic, title),
+    fetchRelevantImage(ctx),
     new Promise<null>((resolve) => setTimeout(() => resolve(null), budgetMs)),
   ]);
 }
