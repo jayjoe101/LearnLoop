@@ -17,7 +17,6 @@ export default async function HomePage() {
         topics={topics}
         profile={profile}
         interactions={interactions}
-        hasXaiKey={Boolean(process.env.XAI_API_KEY)}
       />
     );
   } catch {

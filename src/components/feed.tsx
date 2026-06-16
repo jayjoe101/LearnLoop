@@ -1,168 +1,186 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  generateNewPost,
-  loadMorePosts,
-  refreshFeed,
-  togglePersonalization,
-} from "@/lib/actions";
+import { addTopic, generateNewPost, loadMorePosts, removeTopic } from "@/lib/actions";
 import { PostCard } from "@/components/post-card";
-import type { Post, PostInteraction } from "@/lib/types";
+import { PlusIcon, SparkIcon } from "@/components/icons";
+import type { Post, PostInteraction, Topic } from "@/lib/types";
 
 type Props = {
   posts: Post[];
+  topics: Topic[];
   interactions: Record<string, PostInteraction>;
-  hasXaiKey: boolean;
 };
 
-export function Feed({ posts, interactions, hasXaiKey }: Props) {
+export function Feed({ posts, topics, interactions }: Props) {
   const [prompt, setPrompt] = useState("");
+  const [topicInput, setTopicInput] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<"for-you" | "following" | "explore">(
-    "for-you"
-  );
+  const [filter, setFilter] = useState<"all" | "saved">("all");
 
   const visiblePosts =
-    activeTab === "following"
-      ? posts.filter((p) => interactions[p.id]?.liked)
+    filter === "saved"
+      ? posts.filter((p) => interactions[p.id]?.saved)
       : posts.filter((p) => !interactions[p.id]?.not_interested);
 
-  function handleSendPrompt() {
+  function handlePrompt(e: React.FormEvent) {
+    e.preventDefault();
+    const text = prompt.trim();
+    if (!text) return;
+
     startTransition(async () => {
-      await generateNewPost(prompt || undefined);
+      await generateNewPost(text);
       setPrompt("");
     });
   }
 
-  return (
-    <main className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-700 bg-zinc-950 px-6 py-3">
-        <nav className="flex gap-8 text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => setActiveTab("for-you")}
-            className={
-              activeTab === "for-you"
-                ? "border-b-2 border-white pb-1"
-                : "text-zinc-400 hover:text-zinc-200"
-            }
-          >
-            For You
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("following")}
-            className={
-              activeTab === "following"
-                ? "border-b-2 border-white pb-1"
-                : "text-zinc-400 hover:text-zinc-200"
-            }
-          >
-            Following
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("explore");
-              startTransition(async () => {
-                await refreshFeed();
-              });
-            }}
-            className={
-              activeTab === "explore"
-                ? "border-b-2 border-white pb-1"
-                : "text-zinc-400 hover:text-zinc-200"
-            }
-          >
-            Explore
-          </button>
-        </nav>
+  function handleAddTopic(e: React.FormEvent) {
+    e.preventDefault();
+    const name = topicInput.trim();
+    if (!name) return;
 
-        <div className="flex flex-1 items-center justify-center gap-3 px-6">
-          <input
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSendPrompt()}
-            className="w-full max-w-md rounded-full bg-zinc-800 px-4 py-2 text-sm outline-none ring-violet-500 focus:ring-1"
-            placeholder="Ask Grok for a topic or type custom prompt..."
-          />
-          <button
-            type="button"
-            onClick={handleSendPrompt}
-            disabled={isPending}
-            className="shrink-0 rounded-full bg-violet-600 px-5 py-2 text-sm hover:bg-violet-500 disabled:opacity-50"
-          >
-            Send to Grok
-          </button>
+    startTransition(async () => {
+      await addTopic(name);
+      setTopicInput("");
+    });
+  }
+
+  return (
+    <div className="flex min-h-screen flex-1 flex-col">
+      <header className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#0c0c0c]/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-xl items-center justify-between px-5 py-4 sm:max-w-2xl">
+          <div>
+            <h1 className="text-sm font-semibold tracking-tight text-zinc-100">
+              InsightScroll
+            </h1>
+            <p className="text-xs text-zinc-600">Your feed</p>
+          </div>
+
+          <nav className="flex gap-1 rounded-lg bg-white/[0.03] p-0.5">
+            {(["all", "saved"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setFilter(tab)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
+                  filter === tab
+                    ? "bg-white/[0.08] text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab === "all" ? "Feed" : "Saved"}
+              </button>
+            ))}
+          </nav>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button type="button" className="px-3" aria-label="Profile">
-            👤
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              startTransition(async () => {
-                await togglePersonalization();
-              })
-            }
-            className="rounded-full bg-amber-500 px-4 py-1 text-xs font-semibold text-zinc-900 hover:bg-amber-400"
-          >
-            REFINE ALGO
-          </button>
+        <div className="border-t border-white/[0.04] px-5 py-3 lg:hidden">
+          <div className="mx-auto flex max-w-xl flex-wrap gap-1.5 sm:max-w-2xl">
+            {topics.map((topic) => (
+              <span
+                key={topic.id}
+                className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-1 text-xs text-zinc-400"
+              >
+                {topic.name}
+                <button
+                  type="button"
+                  aria-label={`Remove ${topic.name}`}
+                  disabled={isPending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      await removeTopic(topic.id);
+                    })
+                  }
+                  className="text-zinc-600 hover:text-zinc-300"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <form onSubmit={handleAddTopic} className="flex items-center gap-1">
+              <input
+                value={topicInput}
+                onChange={(e) => setTopicInput(e.target.value)}
+                placeholder="Topic"
+                className="w-20 rounded-md border border-white/[0.06] bg-transparent px-2 py-1 text-xs outline-none focus:border-white/15"
+              />
+              <button type="submit" disabled={!topicInput.trim()} className="text-zinc-500">
+                <PlusIcon className="h-3.5 w-3.5" />
+              </button>
+            </form>
+          </div>
         </div>
       </header>
 
-      <div className="feed-scroll flex-1 space-y-8 overflow-auto p-4">
-        {visiblePosts.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-zinc-400">
-            <p className="text-lg">No posts yet</p>
-            <button
-              type="button"
-              onClick={() =>
-                startTransition(async () => {
-                  await generateNewPost();
-                })
-              }
-              className="mt-4 rounded-full bg-violet-600 px-6 py-2 text-sm text-white"
-            >
-              Generate your first post
-            </button>
-          </div>
-        ) : (
-          visiblePosts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              interaction={interactions[post.id]}
+      <div className="feed-scroll flex-1 overflow-auto">
+        <div className="mx-auto max-w-xl px-5 py-8 sm:max-w-2xl">
+          <form onSubmit={handlePrompt} className="mb-10 flex gap-2">
+            <input
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="What do you want to learn about?"
+              className="flex-1 rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none transition focus:border-white/15 focus:bg-white/[0.03]"
             />
-          ))
-        )}
-      </div>
+            <button
+              type="submit"
+              disabled={isPending || !prompt.trim()}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-40"
+            >
+              <SparkIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Ask</span>
+            </button>
+          </form>
 
-      <footer className="border-t py-4 text-center text-sm text-zinc-400">
-        ↓ Keep scrolling •{" "}
-        <button
-          type="button"
-          onClick={() =>
-            startTransition(async () => {
-              await loadMorePosts(2);
-            })
-          }
-          disabled={isPending}
-          className="underline hover:text-zinc-200 disabled:opacity-50"
-        >
-          Load more
-        </button>{" "}
-        •{" "}
-        <span className="text-emerald-400">
-          {hasXaiKey
-            ? "Live Grok generation enabled"
-            : "Add XAI_API_KEY for live Grok generation"}
-        </span>
-      </footer>
-    </main>
+          {visiblePosts.length === 0 ? (
+            <div className="py-24 text-center">
+              <p className="text-sm text-zinc-500">
+                {filter === "saved" ? "Nothing saved yet" : "Your feed is empty"}
+              </p>
+              {filter === "all" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    startTransition(async () => {
+                      await generateNewPost();
+                    })
+                  }
+                  disabled={isPending}
+                  className="mt-4 text-sm text-zinc-400 underline-offset-4 transition hover:text-zinc-200 hover:underline"
+                >
+                  Generate an insight
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-14">
+              {visiblePosts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  interaction={interactions[post.id]}
+                />
+              ))}
+            </div>
+          )}
+
+          {visiblePosts.length > 0 && filter === "all" && (
+            <div className="mt-14 flex justify-center pb-12">
+              <button
+                type="button"
+                onClick={() =>
+                  startTransition(async () => {
+                    await loadMorePosts(2);
+                  })
+                }
+                disabled={isPending}
+                className="text-xs text-zinc-600 transition hover:text-zinc-400 disabled:opacity-40"
+              >
+                {isPending ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
