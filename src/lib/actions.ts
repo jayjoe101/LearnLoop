@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { generatePost } from "@/lib/grok";
+import {
+  fetchGenerationContext,
+  pickRotatingTopic,
+} from "@/lib/generation-context";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -126,10 +130,14 @@ export async function completeOnboarding(
 
   if (profileError) return { error: profileError.message };
 
-  await Promise.all([
-    generateNewPostForUser(user.id, unique, feedStyle),
-    generateNewPostForUser(user.id, unique, feedStyle),
-  ]);
+  const recentTitles: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    await generateNewPostForUser(user.id, unique, feedStyle, {
+      recentTitles: [...recentTitles],
+      focusTopic: pickRotatingTopic(unique, i),
+      onCreated: (title) => recentTitles.push(title),
+    });
+  }
 
   revalidatePath("/");
   return { success: true };
@@ -139,14 +147,21 @@ async function generateNewPostForUser(
   userId: string,
   topicNames: string[],
   style: FeedStyle,
-  prompt?: string
+  options?: {
+    prompt?: string;
+    recentTitles?: string[];
+    focusTopic?: string;
+    onCreated?: (title: string) => void;
+  }
 ) {
   const supabase = await createClient();
 
   const post = await generatePost({
-    prompt,
+    prompt: options?.prompt,
     topics: topicNames,
     style,
+    recentTitles: options?.recentTitles ?? [],
+    focusTopic: options?.focusTopic,
   });
 
   const { data: inserted, error } = await supabase
@@ -159,12 +174,13 @@ async function generateNewPostForUser(
       image_url: null,
       likes_count: 300 + Math.floor(Math.random() * 500),
       source: "grok",
-      prompt: prompt ?? null,
+      prompt: options?.prompt ?? null,
     })
     .select("id")
     .single();
 
   if (!error && inserted?.id) {
+    options?.onCreated?.(post.title);
     schedulePostImage(inserted.id, post.topic, post.title);
   }
 }
@@ -196,20 +212,28 @@ export async function removeTopic(topicId: string) {
 export async function generateNewPost(prompt?: string) {
   const { supabase, user } = await requireUser();
 
-  const [{ data: topics }, { data: profile }] = await Promise.all([
-    supabase.from("topics").select("name").eq("user_id", user.id),
-    supabase.from("profiles").select("feed_style, onboarding_completed").eq("id", user.id).single(),
+  const [{ data: profile }, ctx] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("feed_style, onboarding_completed")
+      .eq("id", user.id)
+      .single(),
+    fetchGenerationContext(supabase, user.id),
   ]);
 
   if (!profile?.onboarding_completed) {
     return { error: "Complete onboarding first" };
   }
 
+  const style =
+    (profile.feed_style as FeedStyle) ?? "Balanced & insightful";
+
   const post = await generatePost({
     prompt,
-    topics: (topics ?? []).map((t) => t.name),
-    style:
-      (profile?.feed_style as FeedStyle) ?? "Balanced & insightful",
+    topics: ctx.topicNames,
+    style,
+    recentTitles: ctx.recentTitles,
+    focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount),
   });
 
   const { data: inserted, error } = await supabase
@@ -238,7 +262,9 @@ export async function generateNewPost(prompt?: string) {
 }
 
 export async function loadMorePosts(count = 2) {
-  await Promise.all(Array.from({ length: count }, () => generateNewPost()));
+  for (let i = 0; i < count; i++) {
+    await generateNewPost();
+  }
 }
 
 export async function likePost(postId: string) {
@@ -279,10 +305,6 @@ export async function likePost(postId: string) {
       .from("posts")
       .update({ likes_count: post.likes_count + 137 })
       .eq("id", postId);
-  }
-
-  if (Math.random() > 0.25) {
-    void generateNewPost();
   }
 
   revalidatePath("/");
@@ -399,7 +421,8 @@ export async function refreshFeed() {
     await supabase.from("posts").delete().in("id", deleteIds);
   }
 
-  await Promise.all([generateNewPost(), generateNewPost()]);
+  await generateNewPost();
+  await generateNewPost();
   revalidatePath("/");
   return { kept: keepIds.length };
 }

@@ -1,33 +1,55 @@
 import type { FeedStyle } from "@/lib/types";
-import { GENERATION_TEMPLATES } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 6_000;
-/** Non-reasoning fast path — override via XAI_MODEL on Vercel */
-const DEFAULT_MODEL = "grok-4-fast-non-reasoning";
+const XAI_TIMEOUT_MS = 12_000;
+const MAX_ATTEMPTS = 3;
 
-const STYLE_SHORT: Record<FeedStyle, string> = {
-  "Balanced & insightful": "balanced",
-  "Deep technical": "technical",
-  "Fun + surprising": "playful",
-  "Actionable life upgrade": "practical",
+const MODELS = [
+  process.env.XAI_MODEL,
+  "grok-3-mini",
+  "grok-3-mini-fast",
+  "grok-4-fast-non-reasoning",
+].filter((m, i, a): m is string => Boolean(m) && a.indexOf(m) === i);
+
+const STYLE_GUIDE: Record<FeedStyle, string> = {
+  "Balanced & insightful":
+    "Clear, curious, and substantive — like a sharp friend explaining something fascinating.",
+  "Deep technical":
+    "Explain the mechanism. Use precise language but stay readable. Name the system.",
+  "Fun + surprising":
+    "Lead with something unexpected. Counterintuitive hook, then the insight.",
+  "Actionable life upgrade":
+    "One concrete habit or mental model the reader can try today. No fluff.",
 };
 
 const POST_SCHEMA = {
   type: "object",
   properties: {
-    topic: { type: "string" },
-    title: { type: "string" },
-    body: { type: "string" },
+    topic: {
+      type: "string",
+      description: "Short topic label from the user's interests",
+    },
+    title: {
+      type: "string",
+      description:
+        "Unique, specific headline under 90 characters. Never generic or clickbait.",
+    },
+    body: {
+      type: "string",
+      description:
+        "3-4 sentences. Include a concrete fact, example, or mechanism. Teach something real.",
+    },
   },
   required: ["topic", "title", "body"],
   additionalProperties: false,
 } as const;
 
-type GeneratePostInput = {
+export type GeneratePostInput = {
   prompt?: string;
   topics: string[];
   style: FeedStyle;
+  recentTitles?: string[];
+  focusTopic?: string;
 };
 
 export type GeneratedPost = {
@@ -36,39 +58,80 @@ export type GeneratedPost = {
   body: string;
 };
 
-function pickTemplate(topics: string[]): GeneratedPost {
-  const topicSet = new Set(topics.map((t) => t.toLowerCase()));
-  const matched = GENERATION_TEMPLATES.filter((t) =>
-    [...topicSet].some(
-      (userTopic) =>
-        userTopic.includes(t.topic.toLowerCase()) ||
-        t.topic.toLowerCase().includes(userTopic.split(" ")[0] ?? "")
-    )
-  );
-
-  const pool = matched.length > 0 ? matched : GENERATION_TEMPLATES;
-  const template = pool[Math.floor(Math.random() * pool.length)];
-
-  return {
-    topic: template.topic,
-    title: template.title,
-    body: template.body,
-  };
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function buildPrompt(input: GeneratePostInput): string {
-  const tone = STYLE_SHORT[input.style];
-  const interests =
-    input.topics.length > 0 ? input.topics.slice(0, 5).join(", ") : "general";
-  const task = input.prompt?.trim() || "Write one insightful post.";
+function isTooSimilar(title: string, recentTitles: string[]): boolean {
+  const normalized = normalizeTitle(title);
+  if (!normalized) return true;
 
-  return `Tone:${tone}. Topics:${interests}. ${task}`;
+  return recentTitles.some((recent) => {
+    const r = normalizeTitle(recent);
+    if (!r) return false;
+    if (r === normalized) return true;
+    if (r.includes(normalized) || normalized.includes(r)) return true;
+    const a = new Set(normalized.split(" "));
+    const b = new Set(r.split(" "));
+    let overlap = 0;
+    for (const w of a) {
+      if (w.length > 3 && b.has(w)) overlap++;
+    }
+    return overlap >= 4;
+  });
+}
+
+function pickFocusTopic(topics: string[], explicit?: string): string {
+  if (explicit) return explicit;
+  if (topics.length === 0) return "general knowledge";
+  return topics[Math.floor(Math.random() * topics.length)];
+}
+
+function buildMessages(input: GeneratePostInput, attempt: number) {
+  const focus = pickFocusTopic(input.topics, input.focusTopic);
+  const interests =
+    input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
+  const avoid = input.recentTitles?.length
+    ? input.recentTitles.slice(0, 15).map((t) => `- ${t}`).join("\n")
+    : "None yet.";
+
+  const task =
+    input.prompt?.trim() ||
+    `Write one original insight post focused on "${focus}". Surprise the reader with something specific they probably didn't know.`;
+
+  const varietyHint =
+    attempt > 0
+      ? `This is retry #${attempt + 1}. Pick a completely different angle and topic than before.`
+      : "";
+
+  return [
+    {
+      role: "system" as const,
+      content: `You are the editor of InsightScroll, a premium learning feed. Every post must teach something specific and memorable. Ban generic self-help, vague platitudes, and recycled ideas. ${STYLE_GUIDE[input.style]} ${varietyHint}`.trim(),
+    },
+    {
+      role: "user" as const,
+      content: `User interests: ${interests}
+Focus this post on: ${focus}
+Tone: ${input.style}
+
+Do NOT repeat or closely paraphrase these existing post titles:
+${avoid}
+
+${task}`,
+    },
+  ];
 }
 
 async function requestPost(
   apiKey: string,
   model: string,
-  prompt: string
+  messages: ReturnType<typeof buildMessages>,
+  temperature: number
 ): Promise<Response> {
   return fetch(XAI_API_URL, {
     method: "POST",
@@ -79,13 +142,13 @@ async function requestPost(
     signal: AbortSignal.timeout(XAI_TIMEOUT_MS),
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.55,
-      max_tokens: 110,
+      messages,
+      temperature,
+      max_tokens: 320,
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "post",
+          name: "insight_post",
           schema: POST_SCHEMA,
           strict: true,
         },
@@ -94,59 +157,96 @@ async function requestPost(
   });
 }
 
-async function callXai(
+async function callXaiOnce(
   apiKey: string,
-  prompt: string
+  input: GeneratePostInput,
+  attempt: number
 ): Promise<GeneratedPost | null> {
-  const models = [
-    process.env.XAI_MODEL ?? DEFAULT_MODEL,
-    "grok-3-mini-fast",
-  ].filter((m, i, a) => a.indexOf(m) === i);
+  const temperature = 0.78 + attempt * 0.08;
+  const messages = buildMessages(input, attempt);
 
-  let response: Response | null = null;
-  for (const model of models) {
-    const attempt = await requestPost(apiKey, model, prompt);
-    if (attempt.ok) {
-      response = attempt;
-      break;
+  for (const model of MODELS) {
+    const response = await requestPost(apiKey, model, messages, temperature);
+    if (!response.ok) {
+      if (response.status !== 400 && response.status !== 404) break;
+      continue;
     }
-    if (attempt.status !== 400 && attempt.status !== 404) break;
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content as string | undefined;
+    if (!content) continue;
+
+    let parsed: Partial<GeneratedPost>;
+    try {
+      parsed = JSON.parse(content) as Partial<GeneratedPost>;
+    } catch {
+      continue;
+    }
+
+    if (!parsed.title?.trim() || !parsed.body?.trim()) continue;
+
+    const title = parsed.title.trim();
+    const body = parsed.body.trim();
+
+    if (body.length < 80) continue;
+
+    if (isTooSimilar(title, input.recentTitles ?? [])) continue;
+
+    return {
+      topic: parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic),
+      title,
+      body,
+    };
   }
 
-  if (!response?.ok) return null;
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content as string | undefined;
-  if (!content) return null;
-
-  let parsed: Partial<GeneratedPost>;
-  try {
-    parsed = JSON.parse(content) as Partial<GeneratedPost>;
-  } catch {
-    return null;
-  }
-
-  if (!parsed.title?.trim() || !parsed.body?.trim()) return null;
-
-  return {
-    topic: parsed.topic?.trim() || "Insight",
-    title: parsed.title.trim(),
-    body: parsed.body.trim(),
-  };
+  return null;
 }
 
 export async function generatePost(
   input: GeneratePostInput
 ): Promise<GeneratedPost> {
   const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return pickTemplate(input.topics);
+  const recentTitles = input.recentTitles ?? [];
 
-  try {
-    const result = await callXai(apiKey, buildPrompt(input));
-    if (result) return result;
-  } catch {
-    // template fallback
+  if (apiKey) {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const result = await callXaiOnce(apiKey, input, attempt);
+        if (result) return result;
+      } catch {
+        // try next attempt
+      }
+    }
   }
 
-  return pickTemplate(input.topics);
+  return buildFallbackPost(input, recentTitles);
+}
+
+function buildFallbackPost(
+  input: GeneratePostInput,
+  recentTitles: string[]
+): GeneratedPost {
+  const focus = pickFocusTopic(input.topics, input.focusTopic);
+  const angles = [
+    "a counterintuitive study result",
+    "a historical parallel that changes how you see the present",
+    "a mechanism most people misunderstand",
+    "a recent discovery that overturns conventional wisdom",
+    "a practical framework used by experts in the field",
+  ];
+  const angle = angles[Math.floor(Math.random() * angles.length)];
+  const stamp = Date.now().toString(36).slice(-4);
+
+  let title = `What ${focus} reveals about ${angle}`;
+  let tries = 0;
+  while (isTooSimilar(title, recentTitles) && tries < 8) {
+    title = `${focus}: insight ${stamp}-${tries + 1}`;
+    tries++;
+  }
+
+  return {
+    topic: focus,
+    title,
+    body: `Researchers and practitioners in ${focus} keep running into the same blind spot: we assume the obvious explanation is complete. ${angle.charAt(0).toUpperCase() + angle.slice(1)} offers a sharper lens — and it changes what you'd predict next. Worth sitting with for a minute before you scroll on.`,
+  };
 }

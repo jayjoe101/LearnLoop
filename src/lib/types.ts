@@ -82,25 +82,3 @@ export type PostInteraction = {
   not_interested: boolean;
 };
 
-export const GENERATION_TEMPLATES = [
-  {
-    topic: "History",
-    title: "The Roman emperor who accidentally invented modern HR",
-    body: "Trajan's alimenta program was basically government-funded college plus startup grants 1900 years ago. The ROI was insane...",
-  },
-  {
-    topic: "Cognitive Science",
-    title: "Why your brain loves doomscrolling (and the 8-second hack that breaks it)",
-    body: "Dopamine prediction error plus variable rewards. Here's the exact protocol top performers use to turn scrolling into learning.",
-  },
-  {
-    topic: "AI",
-    title: "The hidden cost of context windows nobody talks about",
-    body: "Every token you feed the model shapes what it forgets. Here's how to structure prompts so your feed stays sharp instead of drifting.",
-  },
-  {
-    topic: "Productivity",
-    title: "The 12-minute rule that replaced my morning routine",
-    body: "Not a hack — a constraint. One focused block before inputs, one after. The compounding effect after 30 days is wild.",
-  },
-];
