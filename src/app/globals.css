@@ -224,14 +224,21 @@ button:disabled {
 .chip-tactile {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
   border-radius: 0.5rem;
   border: 1px solid rgba(42, 33, 24, 0.1);
   background: linear-gradient(180deg, #fffdf9 0%, #f5efe6 100%);
   box-shadow: 0 1px 3px rgba(42, 33, 24, 0.06);
-  padding: 0.25rem 0.5rem;
+  padding: 0.35rem 0.65rem;
   font-size: 0.75rem;
   color: var(--color-coffee-latte);
+}
+
+.chip-tactile.btn-tactile:hover:not(:disabled) {
+  border-color: rgba(166, 107, 58, 0.28);
+  color: var(--color-coffee-text-soft);
+  background: #fffdf9;
 }
 
 .surface-panel {

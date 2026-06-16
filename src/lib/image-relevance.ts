@@ -1,21 +1,25 @@
-import { fetchImageCandidates, type ImageContext } from "@/lib/images";
+import { fetchFirstImageCandidate, type ImageContext } from "@/lib/images";
 import { chatCompletion, parseJsonContent, VISION_MODEL } from "@/lib/xai-client";
 
 export type PostImageContext = ImageContext & {
   body?: string;
 };
 
+const PIPELINE_BUDGET_MS = 5_500;
+const VISION_TIMEOUT_MS = 3_500;
+
 async function evaluateImageRelevance(
   imageUrl: string,
-  ctx: PostImageContext
-): Promise<boolean | null> {
-  const excerpt = (ctx.body ?? "").slice(0, 500);
+  ctx: PostImageContext,
+  timeoutMs: number
+): Promise<boolean> {
+  const excerpt = (ctx.body ?? "").slice(0, 280);
 
   const content = await chatCompletion({
     model: VISION_MODEL,
     temperature: 0.05,
-    maxTokens: 64,
-    timeoutMs: 8_000,
+    maxTokens: 32,
+    timeoutMs,
     jsonSchema: {
       name: "image_relevance",
       schema: {
@@ -37,45 +41,51 @@ async function evaluateImageRelevance(
           },
           {
             type: "text",
-            text: `Post topic area: ${ctx.topic}
-Post title: ${ctx.title}
-Post excerpt: ${excerpt}
+            text: `Title: ${ctx.title}
+Excerpt: ${excerpt}
 
-Is this image visually relevant to the specific post subject (not just the broad topic label)?
-Return JSON: { "relevant": true } only if a reader would agree the image fits the post.`,
+Is this image visually relevant to this specific post (not just the broad topic)?
+Return { "relevant": true } only if it clearly fits.`,
           },
         ],
       },
     ],
   });
 
-  if (!content) return null;
+  if (!content) return false;
 
   const parsed = parseJsonContent<{ relevant?: boolean }>(content);
-  if (typeof parsed?.relevant !== "boolean") return null;
-  return parsed.relevant;
+  return parsed?.relevant === true;
 }
 
-/** Fetch Wikipedia candidates in parallel, vision-check in parallel, return first relevant hit. */
+async function fetchValidatedPostImageInner(
+  ctx: PostImageContext
+): Promise<string | null> {
+  const apiKey = process.env.XAI_API_KEY;
+  const imageUrl = await fetchFirstImageCandidate(ctx);
+
+  if (!imageUrl) return null;
+  if (!apiKey) return imageUrl;
+
+  const relevant = await evaluateImageRelevance(
+    imageUrl,
+    ctx,
+    VISION_TIMEOUT_MS
+  );
+
+  return relevant ? imageUrl : null;
+}
+
+/**
+ * One Wikipedia pull + one vision check. Irrelevant or slow → null (imageless post).
+ */
 export async function fetchValidatedPostImage(
   ctx: PostImageContext
 ): Promise<string | null> {
-  const candidates = await fetchImageCandidates(ctx, 4);
-  if (candidates.length === 0) return null;
-
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) return candidates[0];
-
-  const verdicts = await Promise.all(
-    candidates.map((url) => evaluateImageRelevance(url, ctx))
-  );
-
-  const relevantIndex = verdicts.findIndex((v) => v === true);
-  if (relevantIndex >= 0) return candidates[relevantIndex];
-
-  if (verdicts.every((v) => v === null)) {
-    return candidates[0] ?? null;
-  }
-
-  return null;
+  return Promise.race([
+    fetchValidatedPostImageInner(ctx),
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), PIPELINE_BUDGET_MS)
+    ),
+  ]);
 }

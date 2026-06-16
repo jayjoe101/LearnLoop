@@ -39,22 +39,20 @@ export function AppSidebar({ topics }: Props) {
           </p>
           <div className="flex flex-wrap gap-1.5">
             {topics.map((topic) => (
-              <span key={topic.id} className="chip-tactile">
+              <button
+                key={topic.id}
+                type="button"
+                disabled={isPending}
+                aria-label={`Remove ${topic.name} from interests`}
+                onClick={() =>
+                  startTransition(async () => {
+                    await removeTopic(topic.id);
+                  })
+                }
+                className="chip-tactile btn-tactile"
+              >
                 {topic.name}
-                <button
-                  type="button"
-                  aria-label={`Remove ${topic.name}`}
-                  disabled={isPending}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await removeTopic(topic.id);
-                    })
-                  }
-                  className="icon-btn border-0 bg-transparent p-0 shadow-none text-[var(--color-coffee-taupe)] hover:text-[var(--color-coffee-text)] disabled:opacity-40"
-                >
-                  ×
-                </button>
-              </span>
+              </button>
             ))}
           </div>
           <form onSubmit={submitTopic} className="mt-3 flex gap-1.5">

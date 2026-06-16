@@ -25,7 +25,6 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
     displayedPosts,
     pendingCount,
     loadPending,
-    isGenerating,
   } = useLivePosting(posts);
 
   const visiblePosts =
@@ -105,31 +104,23 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
           </div>
         )}
 
-        {filter === "all" && liveOn && pendingCount === 0 && isGenerating && (
-          <div className="border-t border-[var(--color-border)] py-2 text-center text-xs text-[var(--color-coffee-mocha)]">
-            Brewing a new insight…
-          </div>
-        )}
-
         <div className="border-t border-[var(--color-border)] px-5 py-3 lg:hidden">
           <div className="mx-auto flex max-w-xl flex-wrap gap-1.5 sm:max-w-2xl">
             {topics.map((topic) => (
-              <span key={topic.id} className="chip-tactile">
+              <button
+                key={topic.id}
+                type="button"
+                disabled={isPending}
+                aria-label={`Remove ${topic.name} from interests`}
+                onClick={() =>
+                  startTransition(async () => {
+                    await removeTopic(topic.id);
+                  })
+                }
+                className="chip-tactile btn-tactile"
+              >
                 {topic.name}
-                <button
-                  type="button"
-                  aria-label={`Remove ${topic.name}`}
-                  disabled={isPending}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await removeTopic(topic.id);
-                    })
-                  }
-                  className="icon-btn border-0 bg-transparent p-0 shadow-none text-[var(--color-coffee-taupe)] hover:text-[var(--color-coffee-text)]"
-                >
-                  ×
-                </button>
-              </span>
+              </button>
             ))}
             <form onSubmit={handleAddTopic} className="flex items-center gap-1">
               <input

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { generateLivePost } from "@/lib/actions";
 import { appendFingerprint } from "@/lib/dedup";
 import {
-  MAX_PENDING_LIVE_POSTS,
   nextLiveDelayMs,
+  randomPendingPostLimit,
   type LiveSessionContext,
 } from "@/lib/live-posting";
 import type { Post } from "@/lib/types";
@@ -14,7 +14,6 @@ export function useLivePosting(initialPosts: Post[]) {
   const [liveOn, setLiveOn] = useState(false);
   const [displayedPosts, setDisplayedPosts] = useState(initialPosts);
   const [pendingPosts, setPendingPosts] = useState<Post[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
 
   const liveOnRef = useRef(liveOn);
   const sessionRef = useRef<LiveSessionContext>({
@@ -24,6 +23,7 @@ export function useLivePosting(initialPosts: Post[]) {
   });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCountRef = useRef(0);
+  const pendingLimitRef = useRef(randomPendingPostLimit());
 
   useEffect(() => {
     liveOnRef.current = liveOn;
@@ -44,16 +44,14 @@ export function useLivePosting(initialPosts: Post[]) {
     timerRef.current = setTimeout(async () => {
       if (!liveOnRef.current) return;
 
-      if (pendingCountRef.current >= MAX_PENDING_LIVE_POSTS) {
+      if (pendingCountRef.current >= pendingLimitRef.current) {
         timerRef.current = setTimeout(() => {
           if (liveOnRef.current) scheduleNext();
         }, 12_000);
         return;
       }
 
-      setIsGenerating(true);
       const result = await generateLivePost(sessionRef.current);
-      setIsGenerating(false);
 
       if ("post" in result && result.post) {
         const post = result.post;
@@ -94,6 +92,8 @@ export function useLivePosting(initialPosts: Post[]) {
   }, [liveOn, scheduleNext]);
 
   const loadPending = useCallback(() => {
+    pendingLimitRef.current = randomPendingPostLimit();
+
     setDisplayedPosts((prev) => {
       const seen = new Set(prev.map((p) => p.id));
       const fresh = pendingPosts.filter((p) => !seen.has(p.id));
@@ -104,7 +104,13 @@ export function useLivePosting(initialPosts: Post[]) {
   }, [pendingPosts]);
 
   const toggleLive = useCallback(() => {
-    setLiveOn((on) => !on);
+    setLiveOn((on) => {
+      const next = !on;
+      if (next) {
+        pendingLimitRef.current = randomPendingPostLimit();
+      }
+      return next;
+    });
   }, []);
 
   return {
@@ -114,6 +120,5 @@ export function useLivePosting(initialPosts: Post[]) {
     pendingPosts,
     pendingCount: pendingPosts.length,
     loadPending,
-    isGenerating,
   };
 }

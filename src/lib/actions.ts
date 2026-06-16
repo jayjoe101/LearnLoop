@@ -239,13 +239,9 @@ async function insertGeneratedPost(
   if (error || !inserted) return null;
 
   const postId = inserted.id as string;
-  const imageUrl = await attachPostImage(supabase, postId, imageCtx);
-  const row = {
-    ...(inserted as Record<string, unknown>),
-    image_url: imageUrl,
-  };
+  void attachPostImage(supabase, postId, imageCtx);
 
-  return mapRowToPost(row);
+  return mapRowToPost(inserted as Record<string, unknown>);
 }
 
 export async function fetchPostImageUrl(postId: string) {

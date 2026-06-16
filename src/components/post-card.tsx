@@ -21,25 +21,30 @@ type Props = {
   feedStyle?: FeedStyle;
 };
 
-const IMAGE_POLL_DELAYS_MS = [1500, 2500, 3500, 5000];
+const IMAGE_POLL_DELAYS_MS = [2000, 3000, 2500];
 
 export function PostCard({ post, interaction, feedStyle }: Props) {
   const [isPending, startTransition] = useTransition();
   const [imageUrl, setImageUrl] = useState(post.image_url);
+  const [imageSettled, setImageSettled] = useState(!!post.image_url);
   const author = resolvePostAuthor(post);
 
   useEffect(() => {
     setImageUrl(post.image_url);
+    setImageSettled(!!post.image_url);
   }, [post.image_url]);
 
   useEffect(() => {
-    if (imageUrl) return;
+    if (imageUrl || imageSettled) return;
 
     let cancelled = false;
     let attempt = 0;
 
     const poll = async () => {
-      if (cancelled || attempt >= IMAGE_POLL_DELAYS_MS.length) return;
+      if (cancelled || attempt >= IMAGE_POLL_DELAYS_MS.length) {
+        if (!cancelled) setImageSettled(true);
+        return;
+      }
 
       await new Promise((resolve) =>
         setTimeout(resolve, IMAGE_POLL_DELAYS_MS[attempt])
@@ -49,6 +54,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
       const { imageUrl: url } = await fetchPostImageUrl(post.id);
       if (url) {
         setImageUrl(url);
+        setImageSettled(true);
         return;
       }
 
@@ -61,7 +67,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [post.id, imageUrl]);
+  }, [post.id, imageUrl, imageSettled]);
 
   return (
     <article className="post-card group">
@@ -84,11 +90,11 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
             sizes="(max-width: 640px) 100vw, 640px"
           />
         </div>
-      ) : (
+      ) : !imageSettled ? (
         <div className="post-image-placeholder" aria-hidden>
           <span className="post-image-placeholder-label">{post.topic}</span>
         </div>
-      )}
+      ) : null}
 
       <h2 className="post-title">{post.title}</h2>
 

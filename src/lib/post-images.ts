@@ -6,38 +6,19 @@ import {
   type PostImageContext,
 } from "@/lib/image-relevance";
 
-const SYNC_IMAGE_WAIT_MS = 2_500;
-
-/** Vision-validated image attach — brief sync wait, then background finish. */
+/** Non-blocking: validate image in background; irrelevant images are dropped. */
 export async function attachPostImage(
   supabase: SupabaseClient,
   postId: string,
   ctx: PostImageContext
-): Promise<string | null> {
-  const imagePromise = fetchValidatedPostImage(ctx);
+): Promise<null> {
+  after(async () => {
+    const image = await fetchValidatedPostImage(ctx);
+    if (!image) return;
 
-  const image = await Promise.race([
-    imagePromise,
-    new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), SYNC_IMAGE_WAIT_MS)
-    ),
-  ]);
-
-  if (image) {
     await supabase
       .from("posts")
       .update({ image_url: image })
-      .eq("id", postId);
-    return image;
-  }
-
-  after(async () => {
-    const lateImage = await imagePromise;
-    if (!lateImage) return;
-
-    await supabase
-      .from("posts")
-      .update({ image_url: lateImage })
       .eq("id", postId);
 
     revalidatePath("/");

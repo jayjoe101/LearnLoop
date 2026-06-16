@@ -12,7 +12,10 @@ export function nextLiveDelayMs(): number {
   return 21_000 + Math.floor(Math.random() * 18_000);
 }
 
-export const MAX_PENDING_LIVE_POSTS = 5;
+/** Random cap for queued posts before generation pauses (4–11). */
+export function randomPendingPostLimit(): number {
+  return 4 + Math.floor(Math.random() * 8);
+}
 
 export type LiveSessionContext = {
   recentTitles: string[];
