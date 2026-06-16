@@ -1,13 +1,7 @@
 import { redirect } from "next/navigation";
 import { InsightScrollApp } from "@/components/insight-scroll-app";
 import { getFeedData } from "@/lib/actions";
-
-function isSupabaseConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
-}
+import { isSupabaseConfigured } from "@/lib/env";
 
 export default async function HomePage() {
   if (!isSupabaseConfigured()) {

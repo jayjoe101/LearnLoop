@@ -30,9 +30,11 @@ export default function SetupPage() {
           (Authentication → Providers → Anonymous).
         </li>
         <li>
-          Copy <code className="text-emerald-300">.env.example</code> to{" "}
-          <code className="text-emerald-300">.env.local</code> and fill in your
-          Supabase URL and anon key.
+          Pull synced env vars locally:{" "}
+          <code className="text-emerald-300">npx vercel link</code> then{" "}
+          <code className="text-emerald-300">npm run env:pull</code>. Vercel
+          injects <code className="text-emerald-300">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>{" "}
+          (not just anon key).
         </li>
         <li>
           Optional: add <code className="text-emerald-300">XAI_API_KEY</code> for
