@@ -39,18 +39,16 @@ export type Profile = {
 };
 
 export const ONBOARDING_TOPICS = [
-  "AI & Machine Learning",
-  "Space & Physics",
-  "History & Culture",
-  "Psychology & Mind",
-  "Business & Startups",
-  "Health & Wellness",
-  "Philosophy",
-  "Climate & Nature",
-  "Art & Design",
-  "Technology",
-  "Productivity",
+  "Computer Science",
+  "Computer Programming",
+  "Mathematics",
+  "Statistics",
+  "Machine Learning",
+  "AI",
+  "Stocks",
+  "News",
   "Science",
+  "Physics",
 ] as const;
 
 export const FEED_STYLE_OPTIONS: {
