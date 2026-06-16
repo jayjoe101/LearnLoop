@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { generatePost } from "@/lib/grok";
+import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import {
   DEFAULT_TOPICS,
@@ -124,31 +125,40 @@ export async function removeTopic(topicId: string) {
 
 export async function generateNewPost(prompt?: string) {
   const { supabase, user } = await requireUser();
-  await ensureOnboarding(user.id);
 
   const [{ data: topics }, { data: profile }] = await Promise.all([
     supabase.from("topics").select("name").eq("user_id", user.id),
     supabase.from("profiles").select("feed_style").eq("id", user.id).single(),
   ]);
 
-  const generated = await generatePost({
+  const post = await generatePost({
     prompt,
     topics: (topics ?? []).map((t) => t.name),
-    style: (profile?.feed_style as FeedStyle) ?? "Balanced & insightful",
+    style:
+      (profile?.feed_style as FeedStyle) ?? "Balanced & insightful",
   });
 
-  const { error } = await supabase.from("posts").insert({
-    user_id: user.id,
-    topic: generated.topic,
-    title: generated.title,
-    body: generated.body,
-    image_url: generated.image_url,
-    likes_count: 300 + Math.floor(Math.random() * 500),
-    source: "grok",
-    prompt: prompt ?? null,
-  });
+  const { data: inserted, error } = await supabase
+    .from("posts")
+    .insert({
+      user_id: user.id,
+      topic: post.topic,
+      title: post.title,
+      body: post.body,
+      image_url: null,
+      likes_count: 300 + Math.floor(Math.random() * 500),
+      source: "grok",
+      prompt: prompt ?? null,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
+
+  if (inserted?.id) {
+    schedulePostImage(inserted.id, post.topic, post.title);
+  }
+
   revalidatePath("/");
   return { success: true };
 }

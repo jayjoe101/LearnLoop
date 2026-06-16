@@ -1,7 +1,7 @@
 /** ~1 in 5 posts include an image */
 export const IMAGE_INCLUDE_PROBABILITY = 0.2;
 
-const WIKIMEDIA_TIMEOUT_MS = 2_000;
+const WIKIMEDIA_TIMEOUT_MS = 1_500;
 
 export function shouldIncludeImage(): boolean {
   return Math.random() < IMAGE_INCLUDE_PROBABILITY;
@@ -42,7 +42,7 @@ export async function fetchRelevantImage(
       generator: "search",
       gsrsearch: search,
       gsrnamespace: "6",
-      gsrlimit: "6",
+      gsrlimit: "3",
       prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: "800",
