@@ -79,10 +79,12 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
               await likePost(post.id);
             })
           }
-          className="flex items-center gap-1.5 text-xs text-zinc-500 transition hover:text-zinc-200 disabled:opacity-40"
+          className={`btn-tactile post-action-btn ${
+            interaction?.liked ? "post-action-btn-active" : ""
+          }`}
         >
           <HeartIcon
-            className={`h-4 w-4 ${interaction?.liked ? "fill-zinc-300 text-zinc-300" : ""}`}
+            className={`h-4 w-4 ${interaction?.liked ? "fill-[var(--color-coffee-honey)] text-[var(--color-coffee-honey)]" : ""}`}
           />
           <span>{post.likes_count}</span>
         </button>
@@ -95,10 +97,12 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
               await savePost(post.id);
             })
           }
-          className="flex items-center gap-1.5 text-xs text-zinc-500 transition hover:text-zinc-200 disabled:opacity-40"
+          className={`btn-tactile post-action-btn ${
+            interaction?.saved ? "post-action-btn-active" : ""
+          }`}
         >
           <BookmarkIcon
-            className={`h-4 w-4 ${interaction?.saved ? "fill-zinc-300 text-zinc-300" : ""}`}
+            className={`h-4 w-4 ${interaction?.saved ? "fill-[var(--color-coffee-honey)] text-[var(--color-coffee-honey)]" : ""}`}
           />
           <span>{interaction?.saved ? "Saved" : "Save"}</span>
         </button>
@@ -111,7 +115,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
               await generateNewPost(`Expand on: ${post.title}`);
             })
           }
-          className="ml-auto text-xs text-zinc-600 transition hover:text-zinc-300 disabled:opacity-40"
+          className="btn-tactile post-action-btn ml-auto"
         >
           Go deeper
         </button>
@@ -124,7 +128,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
               await markNotInterested(post.id);
             })
           }
-          className="text-xs text-zinc-600 transition hover:text-zinc-400 disabled:opacity-40"
+          className="btn-tactile post-action-btn"
         >
           Hide
         </button>

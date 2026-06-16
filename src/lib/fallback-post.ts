@@ -102,17 +102,17 @@ const TITLE_BUILDERS = [
 
 const BODY_BUILDERS = [
   (wiki: string, subject: string) =>
-    `[[${wiki}]] is one of those ideas that sounds simple until you trace it step by step.\n\n${capitalizeSubject(subject)}. The catch: the naive story hides the constraint that actually drives the outcome.`,
+    `**[[${wiki}]]** is one of those ideas that sounds simple until you trace it step by step.\n\n${capitalizeSubject(subject)}. The catch: ==the naive story hides the constraint that actually drives the outcome==.`,
   (wiki: string, subject: string) =>
-    `Here's the angle textbooks rush past on [[${wiki}]].\n\n${capitalizeSubject(subject)}. Once you see the mechanism, a bunch of "weird" results suddenly look inevitable.`,
+    `Here's the angle textbooks rush past on **[[${wiki}]]**.\n\n${capitalizeSubject(subject)}. Once you see the mechanism, ==a bunch of "weird" results suddenly look inevitable==.`,
   (wiki: string, subject: string) =>
-    `[[${wiki}]] shows up in more places than you'd expect — and not as a buzzword.\n\n${capitalizeSubject(subject)}. The interesting bit is what breaks when you push the system slightly out of spec.`,
+    `**[[${wiki}]]** shows up in more places than you'd expect — and *not* as a buzzword.\n\n${capitalizeSubject(subject)}. The interesting bit is ==what breaks when you push the system slightly out of spec==.`,
   (wiki: string, subject: string) =>
-    `Most explanations of [[${wiki}]] stop right before it gets good.\n\n${capitalizeSubject(subject)}. The version worth knowing names the tradeoff explicitly instead of waving at intuition.`,
+    `Most explanations of **[[${wiki}]]** stop right before it gets good.\n\n${capitalizeSubject(subject)}. The version worth knowing ==names the tradeoff explicitly== instead of waving at intuition.`,
   (wiki: string, subject: string) =>
-    `If [[${wiki}]] feels fuzzy, you're not alone — the clean diagram is a lie of omission.\n\n${capitalizeSubject(subject)}. Follow the chain of cause and effect and the whole thing snaps into focus.`,
+    `If **[[${wiki}]]** feels fuzzy, you're not alone — the clean diagram is a lie of omission.\n\n${capitalizeSubject(subject)}. Follow the chain of cause and effect and ==the whole thing snaps into focus==.`,
   (wiki: string, subject: string) =>
-    `[[${wiki}]] has a reputation problem: people treat it like trivia instead of a tool.\n\n${capitalizeSubject(subject)}. The practical takeaway is smaller than a lecture but more useful than an overview.`,
+    `**[[${wiki}]]** has a reputation problem: people treat it like trivia instead of a tool.\n\n${capitalizeSubject(subject)}. The practical takeaway is ==smaller than a lecture but more useful than an overview==.`,
 ];
 
 export function buildVariedFallbackPost(

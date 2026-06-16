@@ -27,13 +27,6 @@ const MODELS = [
   "grok-3-mini",
 ].filter((m, i, a): m is string => Boolean(m) && a.indexOf(m) === i);
 
-const STYLE_GUIDE: Record<FeedStyle, string> = {
-  "Balanced & insightful": "Clear, curious, substantive.",
-  "Deep technical": "Explain mechanisms precisely but readably.",
-  "Fun + surprising": "Counterintuitive hook, then insight.",
-  "Actionable life upgrade": "One concrete takeaway the reader can try today.",
-};
-
 const POST_SCHEMA = {
   type: "object",
   properties: {
@@ -55,7 +48,7 @@ const POST_SCHEMA = {
     body: {
       type: "string",
       description:
-        "2-4 short paragraphs about the specific subject. Wrap technical terms in [[double brackets]].",
+        "2-4 short paragraphs about the specific subject. Use **bold** for key terms and takeaways, *italic* for emphasis, and ==highlights== for the most surprising insight in each paragraph. Wrap technical terms in [[double brackets]]. Inline [label](url) links are optional in the body.",
     },
     links: {
       type: "array",
@@ -138,11 +131,11 @@ function buildMessages(
     input.prompt?.trim() ||
     `Write one original insight post about: ${subject} (within "${focus}"). Surprise the reader with something specific.`;
 
-  const technicalHint =
-    input.style === "Deep technical" ||
-    ["researcher", "engineer", "explorer", "skeptic"].includes(persona.id)
-      ? "Technical: 2-4 [[wiki-linked]] terms, precise mechanisms."
-      : "Include [[wiki-linked]] terms where helpful.";
+  const technicalHint = ["researcher", "engineer", "explorer", "skeptic"].includes(
+    persona.id
+  )
+    ? "Technical: 2-4 [[wiki-linked]] terms, precise mechanisms."
+    : "Include [[wiki-linked]] terms where helpful.";
 
   const retryHint =
     attempt > 0
@@ -152,11 +145,12 @@ function buildMessages(
   return [
     {
       role: "system" as const,
-      content: `${persona.name} (${persona.role}) on InsightScroll as ${persona.handle}. ${persona.voice}
-Tone: ${STYLE_GUIDE[input.style]}. Teach something specific.
+      content: `${persona.name} (${persona.role}) on LearnLoop as ${persona.handle}. ${persona.voice}
+Write in this persona's voice only. Teach something specific.
 ${scopeRule}
 Title: clickbait about the SPECIFIC SUBJECT only.
-${technicalHint} Include 1-3 real links (Wikipedia for core concept). ${dupHint} ${retryHint}`.trim(),
+Format body with **bold**, *italic*, and ==highlight== markdown for a rich reading experience.
+${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${retryHint}`.trim(),
     },
     {
       role: "user" as const,

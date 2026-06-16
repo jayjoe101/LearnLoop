@@ -32,7 +32,7 @@ export function PostAuthor({
   return (
     <div className="mb-4 flex items-center gap-3">
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[var(--color-coffee-cream)] shadow-md"
         style={{ backgroundColor: accent }}
         aria-hidden
       >
@@ -40,14 +40,16 @@ export function PostAuthor({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-medium text-zinc-100">{name}</span>
-          <span className="text-xs text-zinc-500">{role}</span>
+          <span className="text-sm font-medium text-[var(--color-coffee-cream)]">
+            {name}
+          </span>
+          <span className="text-xs text-[var(--color-coffee-mocha)]">{role}</span>
         </div>
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-[var(--color-coffee-taupe)]">
           {handle}
-          <span className="mx-1.5 text-zinc-700">·</span>
+          <span className="mx-1.5 text-[var(--color-coffee-mocha)]">·</span>
           {topic}
-          <span className="mx-1.5 text-zinc-700">·</span>
+          <span className="mx-1.5 text-[var(--color-coffee-mocha)]">·</span>
           <time dateTime={createdAt}>{timeAgo(createdAt)}</time>
         </p>
       </div>

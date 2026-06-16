@@ -19,7 +19,7 @@ export function InsightScrollApp({
 }: Props) {
   return (
     <div className="flex min-h-screen">
-      <AppSidebar topics={topics} profile={profile} />
+      <AppSidebar topics={topics} />
       <Feed
         posts={posts}
         topics={topics}

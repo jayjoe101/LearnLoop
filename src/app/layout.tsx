@@ -8,7 +8,7 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "InsightScroll",
+  title: "LearnLoop",
   description: "A personalized feed of ideas worth your attention.",
 };
 

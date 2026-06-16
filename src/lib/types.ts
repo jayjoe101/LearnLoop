@@ -56,38 +56,9 @@ export const ONBOARDING_TOPICS = [
   "Statistics",
   "Machine Learning",
   "AI",
-  "Stocks",
-  "News",
   "Science",
   "Physics",
 ] as const;
-
-export const FEED_STYLE_OPTIONS: {
-  value: FeedStyle;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "Balanced & insightful",
-    label: "Balanced",
-    description: "Clear insights across any topic — your default smart feed.",
-  },
-  {
-    value: "Deep technical",
-    label: "Technical",
-    description: "Mechanisms, systems, and how things actually work.",
-  },
-  {
-    value: "Fun + surprising",
-    label: "Surprising",
-    description: "Unexpected angles and ideas you wouldn't think to search for.",
-  },
-  {
-    value: "Actionable life upgrade",
-    label: "Practical",
-    description: "Concrete takeaways you can apply the same day.",
-  },
-];
 
 export type PostInteraction = {
   liked: boolean;

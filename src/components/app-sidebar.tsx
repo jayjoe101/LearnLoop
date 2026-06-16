@@ -1,20 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTopic, generateNewPost, removeTopic, updateFeedStyle } from "@/lib/actions";
+import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
 import { PlusIcon, SparkIcon } from "@/components/icons";
-import { FEED_STYLE_OPTIONS } from "@/lib/types";
-import type { Profile, Topic } from "@/lib/types";
+import type { Topic } from "@/lib/types";
 
 type Props = {
   topics: Topic[];
-  profile: Profile | null;
 };
 
-export function AppSidebar({ topics, profile }: Props) {
+export function AppSidebar({ topics }: Props) {
   const [isPending, startTransition] = useTransition();
   const [topicInput, setTopicInput] = useState("");
-  const currentStyle = profile?.feed_style ?? "Balanced & insightful";
 
   function submitTopic(e: React.FormEvent) {
     e.preventDefault();
@@ -28,22 +25,21 @@ export function AppSidebar({ topics, profile }: Props) {
   }
 
   return (
-    <aside className="hidden w-56 shrink-0 flex-col border-r border-white/[0.06] lg:flex">
+    <aside className="hidden w-56 shrink-0 flex-col border-r border-[var(--color-border)] lg:flex">
       <div className="px-5 py-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">
-          InsightScroll
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--color-coffee-mocha)]">
+          LearnLoop
         </p>
       </div>
 
       <div className="flex flex-1 flex-col gap-8 px-5">
         <section>
-          <p className="mb-3 text-xs font-medium text-zinc-500">Interests</p>
+          <p className="mb-3 text-xs font-medium text-[var(--color-coffee-mocha)]">
+            Interests
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {topics.map((topic) => (
-              <span
-                key={topic.id}
-                className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-1 text-xs text-zinc-300"
-              >
+              <span key={topic.id} className="chip-tactile">
                 {topic.name}
                 <button
                   type="button"
@@ -54,7 +50,7 @@ export function AppSidebar({ topics, profile }: Props) {
                       await removeTopic(topic.id);
                     })
                   }
-                  className="text-zinc-600 transition hover:text-zinc-300 disabled:opacity-40"
+                  className="text-[var(--color-coffee-taupe)] transition hover:text-[var(--color-coffee-cream-soft)] disabled:opacity-40"
                 >
                   ×
                 </button>
@@ -66,46 +62,21 @@ export function AppSidebar({ topics, profile }: Props) {
               value={topicInput}
               onChange={(e) => setTopicInput(e.target.value)}
               placeholder="Add topic"
-              className="min-w-0 flex-1 rounded-md border border-white/[0.06] bg-transparent px-2.5 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-white/15"
+              className="onboarding-input min-w-0 flex-1 px-2.5 py-1.5 text-xs"
             />
             <button
               type="submit"
               disabled={isPending || !topicInput.trim()}
-              className="rounded-md border border-white/[0.06] p-1.5 text-zinc-400 transition hover:border-white/15 hover:text-zinc-200 disabled:opacity-40"
+              className="btn-tactile btn-tactile-ghost p-1.5 disabled:opacity-40"
               aria-label="Add topic"
             >
               <PlusIcon className="h-3.5 w-3.5" />
             </button>
           </form>
         </section>
-
-        <section>
-          <p className="mb-3 text-xs font-medium text-zinc-500">Tone</p>
-          <div className="flex flex-col gap-0.5">
-            {FEED_STYLE_OPTIONS.map((style) => (
-              <button
-                key={style.value}
-                type="button"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    await updateFeedStyle(style.value);
-                  })
-                }
-                className={`rounded-md px-2.5 py-2 text-left text-xs transition disabled:opacity-40 ${
-                  currentStyle === style.value
-                    ? "bg-white/[0.06] text-zinc-100"
-                    : "text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300"
-                }`}
-              >
-                {style.label}
-              </button>
-            ))}
-          </div>
-        </section>
       </div>
 
-      <div className="border-t border-white/[0.06] p-5">
+      <div className="border-t border-[var(--color-border)] p-5">
         <button
           type="button"
           disabled={isPending}
@@ -114,7 +85,7 @@ export function AppSidebar({ topics, profile }: Props) {
               await generateNewPost();
             })
           }
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2.5 text-xs font-medium text-zinc-900 transition hover:bg-white disabled:opacity-50"
+          className="btn-tactile btn-tactile-primary flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs"
         >
           <SparkIcon className="h-3.5 w-3.5" />
           {isPending ? "Generating…" : "New insight"}

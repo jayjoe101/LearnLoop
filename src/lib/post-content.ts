@@ -11,7 +11,14 @@ export type InlineSegment =
   | { type: "wiki"; term: string; url: string }
   | { type: "link"; label: string; url: string };
 
+export type RichTextSegment =
+  | { type: "plain"; value: string }
+  | { type: "bold"; value: string }
+  | { type: "italic"; value: string }
+  | { type: "highlight"; value: string };
+
 const INLINE_PATTERN = /\[\[([^\]]+)\]\]|\[([^\]]+)\]\(([^)]+)\)/g;
+const RICH_TEXT_PATTERN = /\*\*([^*]+)\*\*|\*([^*]+)\*|==([^=]+)==/g;
 
 export function splitParagraphs(body: string): string[] {
   return body
@@ -58,6 +65,35 @@ export function parseInlineSegments(
   }
 
   return segments.length ? segments : [{ type: "text", value: text }];
+}
+
+export function parseRichTextSegments(text: string): RichTextSegment[] {
+  const segments: RichTextSegment[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(RICH_TEXT_PATTERN)) {
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      segments.push({ type: "plain", value: text.slice(lastIndex, index) });
+    }
+
+    if (match[1]) {
+      segments.push({ type: "bold", value: match[1] });
+    } else if (match[2]) {
+      segments.push({ type: "italic", value: match[2] });
+    } else if (match[3]) {
+      segments.push({ type: "highlight", value: match[3] });
+    }
+
+    lastIndex = index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "plain", value: text.slice(lastIndex) });
+  }
+
+  return segments.length ? segments : [{ type: "plain", value: text }];
 }
 
 export function normalizePostLinks(

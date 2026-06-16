@@ -1,6 +1,7 @@
 import {
   enrichBodyWithWikiTerms,
   parseInlineSegments,
+  parseRichTextSegments,
   splitParagraphs,
 } from "@/lib/post-content";
 import { pickWikiSource } from "@/lib/wiki-links";
@@ -39,7 +40,7 @@ function WikiTermLink({
   );
 }
 
-function InlineContent({
+function LinkSegments({
   text,
   wikiSource,
 }: {
@@ -77,6 +78,49 @@ function InlineContent({
             {segment.label}
           </a>
         );
+      })}
+    </>
+  );
+}
+
+function InlineContent({
+  text,
+  wikiSource,
+}: {
+  text: string;
+  wikiSource: "wikipedia" | "grokipedia";
+}) {
+  const segments = parseRichTextSegments(text);
+
+  return (
+    <>
+      {segments.map((segment, i) => {
+        const content = (
+          <LinkSegments text={segment.value} wikiSource={wikiSource} />
+        );
+
+        switch (segment.type) {
+          case "bold":
+            return (
+              <strong key={i} className="post-text-bold">
+                {content}
+              </strong>
+            );
+          case "italic":
+            return (
+              <em key={i} className="post-text-italic">
+                {content}
+              </em>
+            );
+          case "highlight":
+            return (
+              <mark key={i} className="post-text-highlight">
+                {content}
+              </mark>
+            );
+          default:
+            return <span key={i}>{content}</span>;
+        }
       })}
     </>
   );
