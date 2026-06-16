@@ -16,6 +16,7 @@ import {
 import { personaToAuthorFields } from "@/lib/post-author";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
+import type { LiveSessionContext } from "@/lib/live-posting";
 import { pickConcreteSubject } from "@/lib/topic-subjects";
 import {
   type FeedStyle,
@@ -192,12 +193,20 @@ async function postExistsForUser(
   );
 }
 
+function mapRowToPost(row: Record<string, unknown>): Post {
+  return {
+    ...(row as Post),
+    links: (row.links as Post["links"]) ?? [],
+    wiki_terms: (row.wiki_terms as Post["wiki_terms"]) ?? [],
+  };
+}
+
 async function insertGeneratedPost(
   supabase: SupabaseClient,
   userId: string,
   post: GeneratedPost,
   prompt: string | null
-): Promise<string | null> {
+): Promise<Post | null> {
   const imageCtx = {
     topic: post.topic,
     title: post.title,
@@ -220,13 +229,13 @@ async function insertGeneratedPost(
       prompt,
       ...personaToAuthorFields(post.persona),
     })
-    .select("id")
+    .select("*")
     .single();
 
-  if (error || !inserted?.id) return null;
+  if (error || !inserted) return null;
 
-  schedulePostImage(inserted.id, imageCtx, null);
-  return inserted.id;
+  schedulePostImage(inserted.id as string, imageCtx, null);
+  return mapRowToPost(inserted as Record<string, unknown>);
 }
 
 async function createUniquePost(
@@ -241,7 +250,7 @@ async function createUniquePost(
     postCount: number;
     prompt?: string;
   }
-): Promise<GeneratedPost | null> {
+): Promise<Post | null> {
   let titles = [...options.recentTitles];
   let fingerprints = [...options.recentFingerprints];
 
@@ -282,13 +291,13 @@ async function createUniquePost(
       continue;
     }
 
-    const id = await insertGeneratedPost(
+    const inserted = await insertGeneratedPost(
       supabase,
       userId,
       post,
       options.prompt ?? null
     );
-    if (id) return post;
+    if (inserted) return inserted;
   }
 
   return null;
@@ -350,7 +359,52 @@ export async function generateNewPost(prompt?: string) {
   if (!created) return { error: "Could not generate a unique post" };
 
   revalidatePath("/");
-  return { success: true };
+  return { success: true, post: created };
+}
+
+/** Background live post — no full-page revalidate; returns the new post for client queue. */
+export async function generateLivePost(session?: LiveSessionContext) {
+  const { supabase, user } = await requireUser();
+
+  const [{ data: profile }, ctx] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("feed_style, onboarding_completed")
+      .eq("id", user.id)
+      .single(),
+    fetchGenerationContext(supabase, user.id),
+  ]);
+
+  if (!profile?.onboarding_completed) {
+    return { error: "Complete onboarding first" };
+  }
+
+  const style =
+    (profile.feed_style as FeedStyle) ?? "Balanced & insightful";
+
+  const recentTitles = [
+    ...ctx.recentTitles,
+    ...(session?.recentTitles ?? []),
+  ].slice(-14);
+  const recentFingerprints = [
+    ...ctx.recentFingerprints,
+    ...(session?.recentFingerprints ?? []),
+  ].slice(-14);
+  const postCount =
+    ctx.postCount + (session?.postCountOffset ?? 0);
+
+  const created = await createUniquePost(supabase, user.id, {
+    topicNames: ctx.topicNames,
+    style,
+    recentTitles,
+    recentFingerprints,
+    focusTopic: pickRotatingTopic(ctx.topicNames, postCount),
+    postCount,
+  });
+
+  if (!created) return { error: "Could not generate a unique post" };
+
+  return { post: created };
 }
 
 export async function loadMorePosts(count = 2) {

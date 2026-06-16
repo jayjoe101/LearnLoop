@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTopic, generateNewPost, loadMorePosts, removeTopic } from "@/lib/actions";
+import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
+import { useLivePosting } from "@/hooks/use-live-posting";
 import { PostCard } from "@/components/post-card";
 import { PlusIcon, SparkIcon } from "@/components/icons";
 import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
@@ -19,10 +20,19 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
   const [isPending, startTransition] = useTransition();
   const [filter, setFilter] = useState<"all" | "saved">("all");
 
+  const {
+    liveOn,
+    toggleLive,
+    displayedPosts,
+    pendingCount,
+    loadPending,
+    isGenerating,
+  } = useLivePosting(posts);
+
   const visiblePosts =
     filter === "saved"
-      ? posts.filter((p) => interactions[p.id]?.saved)
-      : posts.filter((p) => !interactions[p.id]?.not_interested);
+      ? displayedPosts.filter((p) => interactions[p.id]?.saved)
+      : displayedPosts.filter((p) => !interactions[p.id]?.not_interested);
 
   function handlePrompt(e: React.FormEvent) {
     e.preventDefault();
@@ -48,16 +58,16 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
 
   return (
     <div className="flex min-h-screen flex-1 flex-col">
-      <header className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#0c0c0c]/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-xl items-center justify-between px-5 py-4 sm:max-w-2xl">
-          <div>
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#0c0c0c]/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 py-4 sm:max-w-2xl">
+          <div className="min-w-0">
             <h1 className="text-sm font-semibold tracking-tight text-zinc-100">
               InsightScroll
             </h1>
             <p className="text-xs text-zinc-600">Your feed</p>
           </div>
 
-          <nav className="flex gap-1 rounded-lg bg-white/[0.03] p-0.5">
+          <nav className="flex shrink-0 gap-1 rounded-lg bg-white/[0.03] p-0.5">
             {(["all", "saved"] as const).map((tab) => (
               <button
                 key={tab}
@@ -73,7 +83,47 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
               </button>
             ))}
           </nav>
+
+          {filter === "all" && (
+            <button
+              type="button"
+              onClick={toggleLive}
+              className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                liveOn
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:text-zinc-200"
+              }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  liveOn
+                    ? "animate-pulse bg-emerald-400"
+                    : "bg-zinc-600"
+                }`}
+                aria-hidden
+              />
+              Live posting
+            </button>
+          )}
         </div>
+
+        {filter === "all" && pendingCount > 0 && (
+          <div className="flex justify-center border-t border-white/[0.04] py-2">
+            <button
+              type="button"
+              onClick={loadPending}
+              className="rounded-full bg-sky-500 px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-400"
+            >
+              Load {pendingCount} new {pendingCount === 1 ? "post" : "posts"}
+            </button>
+          </div>
+        )}
+
+        {filter === "all" && liveOn && pendingCount === 0 && isGenerating && (
+          <div className="border-t border-white/[0.04] py-2 text-center text-xs text-zinc-600">
+            Brewing a new insight…
+          </div>
+        )}
 
         <div className="border-t border-white/[0.04] px-5 py-3 lg:hidden">
           <div className="mx-auto flex max-w-xl flex-wrap gap-1.5 sm:max-w-2xl">
@@ -162,23 +212,6 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
                   feedStyle={feedStyle}
                 />
               ))}
-            </div>
-          )}
-
-          {visiblePosts.length > 0 && filter === "all" && (
-            <div className="mt-14 flex justify-center pb-12">
-              <button
-                type="button"
-                onClick={() =>
-                  startTransition(async () => {
-                    await loadMorePosts(2);
-                  })
-                }
-                disabled={isPending}
-                className="text-xs text-zinc-600 transition hover:text-zinc-400 disabled:opacity-40"
-              >
-                {isPending ? "Loading…" : "Load more"}
-              </button>
             </div>
           )}
         </div>
