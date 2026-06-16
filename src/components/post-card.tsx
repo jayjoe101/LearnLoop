@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { useEffect, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
+  fetchPostImageUrl,
   generateNewPost,
   likePost,
   markNotInterested,
@@ -21,17 +21,47 @@ type Props = {
   feedStyle?: FeedStyle;
 };
 
+const IMAGE_POLL_DELAYS_MS = [1500, 2500, 3500, 5000];
+
 export function PostCard({ post, interaction, feedStyle }: Props) {
   const [isPending, startTransition] = useTransition();
-  const router = useRouter();
+  const [imageUrl, setImageUrl] = useState(post.image_url);
   const author = resolvePostAuthor(post);
 
   useEffect(() => {
-    if (post.image_url) return;
+    setImageUrl(post.image_url);
+  }, [post.image_url]);
 
-    const timer = window.setTimeout(() => router.refresh(), 2000);
-    return () => window.clearTimeout(timer);
-  }, [post.id, post.image_url, router]);
+  useEffect(() => {
+    if (imageUrl) return;
+
+    let cancelled = false;
+    let attempt = 0;
+
+    const poll = async () => {
+      if (cancelled || attempt >= IMAGE_POLL_DELAYS_MS.length) return;
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, IMAGE_POLL_DELAYS_MS[attempt])
+      );
+      if (cancelled) return;
+
+      const { imageUrl: url } = await fetchPostImageUrl(post.id);
+      if (url) {
+        setImageUrl(url);
+        return;
+      }
+
+      attempt += 1;
+      poll();
+    };
+
+    poll();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [post.id, imageUrl]);
 
   return (
     <article className="post-card group">
@@ -44,10 +74,10 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
         createdAt={post.created_at}
       />
 
-      {post.image_url ? (
+      {imageUrl ? (
         <div className="post-image-frame">
           <Image
-            src={post.image_url}
+            src={imageUrl}
             alt=""
             fill
             className="object-cover transition duration-700 group-hover:scale-[1.02]"
@@ -84,7 +114,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
           }`}
         >
           <HeartIcon
-            className={`h-4 w-4 ${interaction?.liked ? "fill-[var(--color-coffee-honey)] text-[var(--color-coffee-honey)]" : ""}`}
+            className={`h-4 w-4 ${interaction?.liked ? "fill-[var(--color-coffee-caramel)] text-[var(--color-coffee-caramel)]" : ""}`}
           />
           <span>{post.likes_count}</span>
         </button>
@@ -102,7 +132,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
           }`}
         >
           <BookmarkIcon
-            className={`h-4 w-4 ${interaction?.saved ? "fill-[var(--color-coffee-honey)] text-[var(--color-coffee-honey)]" : ""}`}
+            className={`h-4 w-4 ${interaction?.saved ? "fill-[var(--color-coffee-caramel)] text-[var(--color-coffee-caramel)]" : ""}`}
           />
           <span>{interaction?.saved ? "Saved" : "Save"}</span>
         </button>

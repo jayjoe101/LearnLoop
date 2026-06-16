@@ -17,8 +17,9 @@ import {
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 12_000;
-const AI_TRIES_BEFORE_FALLBACK = 3;
+const XAI_TIMEOUT_MS = 9_000;
+const AI_TRIES_BEFORE_FALLBACK = 2;
+const MAX_MODEL_ATTEMPTS = 2;
 
 const MODELS = [
   process.env.XAI_MODEL,
@@ -270,7 +271,7 @@ async function callXai(
         },
       ];
 
-  for (let i = 0; i < MODELS.length; i++) {
+  for (let i = 0; i < Math.min(MODELS.length, MAX_MODEL_ATTEMPTS); i++) {
     const model = MODELS[i];
     let response: Response;
 

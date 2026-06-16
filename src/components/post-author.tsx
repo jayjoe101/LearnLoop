@@ -32,7 +32,7 @@ export function PostAuthor({
   return (
     <div className="mb-4 flex items-center gap-3">
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[var(--color-coffee-cream)] shadow-md"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white shadow-md"
         style={{ backgroundColor: accent }}
         aria-hidden
       >
@@ -40,7 +40,7 @@ export function PostAuthor({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-medium text-[var(--color-coffee-cream)]">
+          <span className="text-sm font-medium text-[var(--color-coffee-text)]">
             {name}
           </span>
           <span className="text-xs text-[var(--color-coffee-mocha)]">{role}</span>

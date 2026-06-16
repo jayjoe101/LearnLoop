@@ -27,7 +27,7 @@ export function AppSidebar({ topics }: Props) {
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r border-[var(--color-border)] lg:flex">
       <div className="px-5 py-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--color-coffee-mocha)]">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--color-coffee-text-soft)]">
           LearnLoop
         </p>
       </div>
@@ -50,7 +50,7 @@ export function AppSidebar({ topics }: Props) {
                       await removeTopic(topic.id);
                     })
                   }
-                  className="text-[var(--color-coffee-taupe)] transition hover:text-[var(--color-coffee-cream-soft)] disabled:opacity-40"
+                  className="icon-btn border-0 bg-transparent p-0 shadow-none text-[var(--color-coffee-taupe)] hover:text-[var(--color-coffee-text)] disabled:opacity-40"
                 >
                   ×
                 </button>
@@ -67,7 +67,7 @@ export function AppSidebar({ topics }: Props) {
             <button
               type="submit"
               disabled={isPending || !topicInput.trim()}
-              className="btn-tactile btn-tactile-ghost p-1.5 disabled:opacity-40"
+              className="btn-tactile icon-btn p-1.5 disabled:opacity-40"
               aria-label="Add topic"
             >
               <PlusIcon className="h-3.5 w-3.5" />

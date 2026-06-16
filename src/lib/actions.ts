@@ -14,7 +14,7 @@ import {
   pickRotatingTopic,
 } from "@/lib/generation-context";
 import { personaToAuthorFields } from "@/lib/post-author";
-import { schedulePostImage } from "@/lib/post-images";
+import { attachPostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
 import { pickConcreteSubject } from "@/lib/topic-subjects";
@@ -28,7 +28,7 @@ import {
 
 const MIN_ONBOARDING_TOPICS = 3;
 const MAX_ONBOARDING_TOPICS = 8;
-const MAX_DEDUP_RETRIES = 2;
+const MAX_DEDUP_RETRIES = 1;
 
 async function requireUser() {
   const supabase = await createClient();
@@ -234,8 +234,26 @@ async function insertGeneratedPost(
 
   if (error || !inserted) return null;
 
-  schedulePostImage(inserted.id as string, imageCtx, null);
-  return mapRowToPost(inserted as Record<string, unknown>);
+  const postId = inserted.id as string;
+  const imageUrl = await attachPostImage(supabase, postId, imageCtx);
+  const row = {
+    ...(inserted as Record<string, unknown>),
+    image_url: imageUrl,
+  };
+
+  return mapRowToPost(row);
+}
+
+export async function fetchPostImageUrl(postId: string) {
+  const { supabase, user } = await requireUser();
+  const { data } = await supabase
+    .from("posts")
+    .select("image_url")
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .single();
+
+  return { imageUrl: (data?.image_url as string | null) ?? null };
 }
 
 async function createUniquePost(

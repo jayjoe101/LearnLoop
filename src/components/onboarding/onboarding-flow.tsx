@@ -92,7 +92,7 @@ export function OnboardingFlow() {
         {step === "welcome" && (
           <div key="welcome" className="onboarding-step">
             <div className="onboarding-orb mx-auto mb-8" />
-            <h1 className="text-center text-2xl font-semibold tracking-tight text-[var(--color-coffee-cream)]">
+            <h1 className="text-center text-2xl font-semibold tracking-tight text-[var(--color-coffee-text)]">
               LearnLoop
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-relaxed text-[var(--color-coffee-mocha)]">
@@ -114,7 +114,7 @@ export function OnboardingFlow() {
 
         {step === "interests" && (
           <div key="interests" className="onboarding-step">
-            <h2 className="text-xl font-semibold tracking-tight text-[var(--color-coffee-cream)]">
+            <h2 className="text-xl font-semibold tracking-tight text-[var(--color-coffee-text)]">
               What interests you?
             </h2>
             <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">
@@ -180,7 +180,7 @@ export function OnboardingFlow() {
         {step === "building" && (
           <div key="building" className="onboarding-step py-8 text-center">
             <div className="onboarding-orb mx-auto mb-8 onboarding-orb-pulse" />
-            <h2 className="text-lg font-medium text-[var(--color-coffee-cream)]">
+            <h2 className="text-lg font-medium text-[var(--color-coffee-text)]">
               Building your feed
             </h2>
             <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">

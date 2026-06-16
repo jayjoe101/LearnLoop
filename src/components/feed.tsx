@@ -49,10 +49,10 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
       <header className="surface-panel sticky top-0 z-20 border-b">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 py-4 sm:max-w-2xl">
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-cream)]">
+            <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-text)]">
               LearnLoop
             </h1>
-            <p className="text-xs text-[var(--color-coffee-taupe)]">Your feed</p>
+            <p className="text-xs text-[var(--color-coffee-mocha)]">Your feed</p>
           </div>
 
           <nav className="tab-tactile-group shrink-0">
@@ -76,7 +76,7 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
               onClick={toggleLive}
               className={`btn-tactile btn-tactile-pill flex shrink-0 items-center gap-2 px-3 py-1.5 text-xs font-medium ${
                 liveOn
-                  ? "border-[rgba(143,166,122,0.45)] bg-[rgba(143,166,122,0.14)] text-[var(--color-coffee-sage)]"
+                  ? "border-[rgba(109,138,90,0.35)] bg-[rgba(109,138,90,0.12)] text-[var(--color-coffee-sage)]"
                   : "btn-tactile-ghost"
               }`}
             >
@@ -125,7 +125,7 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
                       await removeTopic(topic.id);
                     })
                   }
-                  className="text-[var(--color-coffee-taupe)] transition hover:text-[var(--color-coffee-cream-soft)]"
+                  className="icon-btn border-0 bg-transparent p-0 shadow-none text-[var(--color-coffee-taupe)] hover:text-[var(--color-coffee-text)]"
                 >
                   ×
                 </button>
@@ -141,7 +141,7 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
               <button
                 type="submit"
                 disabled={!topicInput.trim()}
-                className="btn-tactile btn-tactile-ghost p-1.5 text-[var(--color-coffee-mocha)]"
+                className="btn-tactile icon-btn p-1.5"
               >
                 <PlusIcon className="h-3.5 w-3.5" />
               </button>
