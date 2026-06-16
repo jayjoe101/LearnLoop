@@ -14,10 +14,12 @@ type Props = {
   feedStyle?: FeedStyle;
 };
 
+type FeedFilter = "all" | "liked";
+
 export function Feed({ posts, topics, interactions, feedStyle }: Props) {
   const [topicInput, setTopicInput] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [filter, setFilter] = useState<"all" | "saved">("all");
+  const [filter, setFilter] = useState<FeedFilter>("all");
 
   const {
     liveOn,
@@ -28,8 +30,8 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
   } = useLivePosting(posts);
 
   const visiblePosts =
-    filter === "saved"
-      ? displayedPosts.filter((p) => interactions[p.id]?.saved)
+    filter === "liked"
+      ? displayedPosts.filter((p) => interactions[p.id]?.liked)
       : displayedPosts.filter((p) => !interactions[p.id]?.not_interested);
 
   function handleAddTopic(e: React.FormEvent) {
@@ -44,7 +46,7 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col">
+    <div className="flex min-h-screen flex-1 flex-col animate-fade-in">
       <header className="surface-panel sticky top-0 z-20 border-b">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 py-4 sm:max-w-2xl">
           <div className="min-w-0">
@@ -55,16 +57,21 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
           </div>
 
           <nav className="tab-tactile-group shrink-0">
-            {(["all", "saved"] as const).map((tab) => (
+            {(
+              [
+                { id: "all" as const, label: "Feed" },
+                { id: "liked" as const, label: "Liked" },
+              ] as const
+            ).map((tab) => (
               <button
-                key={tab}
+                key={tab.id}
                 type="button"
-                onClick={() => setFilter(tab)}
-                className={`tab-tactile capitalize ${
-                  filter === tab ? "tab-tactile-active" : ""
+                onClick={() => setFilter(tab.id)}
+                className={`tab-tactile ${
+                  filter === tab.id ? "tab-tactile-active" : ""
                 }`}
               >
-                {tab === "all" ? "Feed" : "Saved"}
+                {tab.label}
               </button>
             ))}
           </nav>
@@ -80,9 +87,9 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
               }`}
             >
               <span
-                className={`h-2 w-2 rounded-full ${
+                className={`h-2 w-2 rounded-full transition-transform duration-300 ${
                   liveOn
-                    ? "animate-pulse bg-[var(--color-coffee-sage)]"
+                    ? "animate-pulse bg-[var(--color-coffee-sage)] scale-110"
                     : "bg-[var(--color-coffee-taupe)]"
                 }`}
                 aria-hidden
@@ -92,17 +99,23 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
           )}
         </div>
 
-        {filter === "all" && pendingCount > 0 && (
-          <div className="flex justify-center border-t border-[var(--color-border)] py-2.5">
+        <div
+          className={`live-pending-banner border-t border-[var(--color-border)] ${
+            filter === "all" && pendingCount > 0
+              ? "live-pending-banner--visible"
+              : ""
+          }`}
+        >
+          <div className="flex justify-center py-2.5">
             <button
               type="button"
               onClick={loadPending}
-              className="btn-tactile btn-tactile-accent btn-tactile-pill px-4 py-1.5 text-xs"
+              className="btn-tactile btn-tactile-accent btn-tactile-pill animate-banner-in px-4 py-1.5 text-xs"
             >
               Load {pendingCount} new {pendingCount === 1 ? "post" : "posts"}
             </button>
           </div>
-        )}
+        </div>
 
         <div className="border-t border-[var(--color-border)] px-5 py-3 lg:hidden">
           <div className="mx-auto flex max-w-xl flex-wrap gap-1.5 sm:max-w-2xl">
@@ -144,9 +157,11 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
       <div className="feed-scroll flex-1 overflow-auto">
         <div className="mx-auto max-w-xl px-5 py-8 sm:max-w-2xl">
           {visiblePosts.length === 0 ? (
-            <div className="py-24 text-center">
+            <div className="feed-empty-enter py-24 text-center">
               <p className="text-sm text-[var(--color-coffee-mocha)]">
-                {filter === "saved" ? "Nothing saved yet" : "Your feed is empty"}
+                {filter === "liked"
+                  ? "No liked posts yet"
+                  : "Your feed is empty"}
               </p>
               {filter === "all" && (
                 <button
@@ -165,12 +180,13 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
             </div>
           ) : (
             <div className="space-y-14">
-              {visiblePosts.map((post) => (
+              {visiblePosts.map((post, index) => (
                 <PostCard
                   key={post.id}
                   post={post}
                   interaction={interactions[post.id]}
                   feedStyle={feedStyle}
+                  index={index}
                 />
               ))}
             </div>
