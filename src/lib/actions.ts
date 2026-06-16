@@ -5,14 +5,15 @@ import { generatePost } from "@/lib/grok";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import {
-  DEFAULT_TOPICS,
-  SEED_POSTS,
   type FeedStyle,
   type Post,
   type PostInteraction,
   type Profile,
   type Topic,
 } from "@/lib/types";
+
+const MIN_ONBOARDING_TOPICS = 3;
+const MAX_ONBOARDING_TOPICS = 8;
 
 async function requireUser() {
   const supabase = await createClient();
@@ -28,36 +29,6 @@ async function requireUser() {
   return { supabase, user };
 }
 
-async function ensureOnboarding(userId: string) {
-  const supabase = await createClient();
-
-  const { count: topicCount } = await supabase
-    .from("topics")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  if (!topicCount) {
-    await supabase.from("topics").insert(
-      DEFAULT_TOPICS.map((name) => ({ user_id: userId, name }))
-    );
-  }
-
-  const { count: postCount } = await supabase
-    .from("posts")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  if (!postCount) {
-    await supabase.from("posts").insert(
-      SEED_POSTS.map((post) => ({
-        user_id: userId,
-        ...post,
-        source: "seed" as const,
-      }))
-    );
-  }
-}
-
 export async function getFeedData(): Promise<{
   posts: Post[];
   topics: Topic[];
@@ -65,7 +36,6 @@ export async function getFeedData(): Promise<{
   interactions: Record<string, PostInteraction>;
 }> {
   const { supabase, user } = await requireUser();
-  await ensureOnboarding(user.id);
 
   const [postsRes, topicsRes, profileRes, interactionsRes] = await Promise.all([
     supabase
@@ -91,12 +61,112 @@ export async function getFeedData(): Promise<{
     };
   }
 
+  const rawProfile = profileRes.data as Record<string, unknown> | null;
+
+  const profile: Profile | null = rawProfile
+    ? {
+        id: rawProfile.id as string,
+        display_name: (rawProfile.display_name as string | null) ?? null,
+        feed_style: (rawProfile.feed_style as FeedStyle) ?? "Balanced & insightful",
+        personalization_enabled:
+          (rawProfile.personalization_enabled as boolean) ?? true,
+        onboarding_completed:
+          (rawProfile.onboarding_completed as boolean) ?? false,
+      }
+    : null;
+
   return {
     posts: (postsRes.data ?? []) as Post[],
     topics: (topicsRes.data ?? []) as Topic[],
-    profile: (profileRes.data as Profile | null) ?? null,
+    profile,
     interactions,
   };
+}
+
+export async function completeOnboarding(
+  topicNames: string[],
+  feedStyle: FeedStyle
+) {
+  const unique = [...new Set(topicNames.map((t) => t.trim()).filter(Boolean))];
+
+  if (unique.length < MIN_ONBOARDING_TOPICS) {
+    return { error: `Pick at least ${MIN_ONBOARDING_TOPICS} interests` };
+  }
+  if (unique.length > MAX_ONBOARDING_TOPICS) {
+    return { error: `Pick at most ${MAX_ONBOARDING_TOPICS} interests` };
+  }
+
+  const { supabase, user } = await requireUser();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("onboarding_completed")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.onboarding_completed) {
+    return { success: true, alreadyComplete: true };
+  }
+
+  await supabase.from("topics").delete().eq("user_id", user.id);
+
+  const { error: topicsError } = await supabase.from("topics").insert(
+    unique.map((name) => ({ user_id: user.id, name }))
+  );
+  if (topicsError) return { error: topicsError.message };
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({
+      feed_style: feedStyle,
+      personalization_enabled: true,
+      onboarding_completed: true,
+    })
+    .eq("id", user.id);
+
+  if (profileError) return { error: profileError.message };
+
+  await Promise.all([
+    generateNewPostForUser(user.id, unique, feedStyle),
+    generateNewPostForUser(user.id, unique, feedStyle),
+  ]);
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+async function generateNewPostForUser(
+  userId: string,
+  topicNames: string[],
+  style: FeedStyle,
+  prompt?: string
+) {
+  const supabase = await createClient();
+
+  const post = await generatePost({
+    prompt,
+    topics: topicNames,
+    style,
+  });
+
+  const { data: inserted, error } = await supabase
+    .from("posts")
+    .insert({
+      user_id: userId,
+      topic: post.topic,
+      title: post.title,
+      body: post.body,
+      image_url: null,
+      likes_count: 300 + Math.floor(Math.random() * 500),
+      source: "grok",
+      prompt: prompt ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (!error && inserted?.id) {
+    schedulePostImage(inserted.id, post.topic, post.title);
+  }
 }
 
 export async function addTopic(name: string) {
@@ -128,8 +198,12 @@ export async function generateNewPost(prompt?: string) {
 
   const [{ data: topics }, { data: profile }] = await Promise.all([
     supabase.from("topics").select("name").eq("user_id", user.id),
-    supabase.from("profiles").select("feed_style").eq("id", user.id).single(),
+    supabase.from("profiles").select("feed_style, onboarding_completed").eq("id", user.id).single(),
   ]);
+
+  if (!profile?.onboarding_completed) {
+    return { error: "Complete onboarding first" };
+  }
 
   const post = await generatePost({
     prompt,

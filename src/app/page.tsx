@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { InsightScrollApp } from "@/components/insight-scroll-app";
+import { HomeShell } from "@/components/home-shell";
 import { getFeedData } from "@/lib/actions";
 import { isSupabaseConfigured } from "@/lib/env";
 
@@ -12,7 +12,7 @@ export default async function HomePage() {
     const { posts, topics, profile, interactions } = await getFeedData();
 
     return (
-      <InsightScrollApp
+      <HomeShell
         posts={posts}
         topics={topics}
         profile={profile}

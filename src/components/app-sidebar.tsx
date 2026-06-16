@@ -3,14 +3,8 @@
 import { useState, useTransition } from "react";
 import { addTopic, generateNewPost, removeTopic, updateFeedStyle } from "@/lib/actions";
 import { PlusIcon, SparkIcon } from "@/components/icons";
-import type { FeedStyle, Profile, Topic } from "@/lib/types";
-
-const STYLES: { value: FeedStyle; label: string }[] = [
-  { value: "Balanced & insightful", label: "Balanced" },
-  { value: "Deep technical", label: "Technical" },
-  { value: "Fun + surprising", label: "Playful" },
-  { value: "Actionable life upgrade", label: "Practical" },
-];
+import { FEED_STYLE_OPTIONS } from "@/lib/types";
+import type { Profile, Topic } from "@/lib/types";
 
 type Props = {
   topics: Topic[];
@@ -88,7 +82,7 @@ export function AppSidebar({ topics, profile }: Props) {
         <section>
           <p className="mb-3 text-xs font-medium text-zinc-500">Tone</p>
           <div className="flex flex-col gap-0.5">
-            {STYLES.map((style) => (
+            {FEED_STYLE_OPTIONS.map((style) => (
               <button
                 key={style.value}
                 type="button"

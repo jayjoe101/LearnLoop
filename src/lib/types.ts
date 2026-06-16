@@ -31,38 +31,56 @@ export type Profile = {
   display_name: string | null;
   feed_style: FeedStyle;
   personalization_enabled: boolean;
+  onboarding_completed: boolean;
 };
+
+export const ONBOARDING_TOPICS = [
+  "AI & Machine Learning",
+  "Space & Physics",
+  "History & Culture",
+  "Psychology & Mind",
+  "Business & Startups",
+  "Health & Wellness",
+  "Philosophy",
+  "Climate & Nature",
+  "Art & Design",
+  "Technology",
+  "Productivity",
+  "Science",
+] as const;
+
+export const FEED_STYLE_OPTIONS: {
+  value: FeedStyle;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "Balanced & insightful",
+    label: "Balanced",
+    description: "Clear insights across any topic — your default smart feed.",
+  },
+  {
+    value: "Deep technical",
+    label: "Technical",
+    description: "Mechanisms, systems, and how things actually work.",
+  },
+  {
+    value: "Fun + surprising",
+    label: "Surprising",
+    description: "Unexpected angles and ideas you wouldn't think to search for.",
+  },
+  {
+    value: "Actionable life upgrade",
+    label: "Practical",
+    description: "Concrete takeaways you can apply the same day.",
+  },
+];
 
 export type PostInteraction = {
   liked: boolean;
   saved: boolean;
   not_interested: boolean;
 };
-
-export const DEFAULT_TOPICS = [
-  "AI & LLMs",
-  "Space Exploration",
-  "Ancient History",
-  "Cognitive Science",
-  "Productivity",
-];
-
-export const SEED_POSTS = [
-  {
-    topic: "Space",
-    title: "JWST just proved the early universe is way weirder than we thought",
-    body: "Astronomers expected tiny galaxies. Instead we found massive, mature ones only 300M years after the Big Bang. This breaks every formation model. Here's the simplest analogy that actually works...",
-    image_url: null,
-    likes_count: 1243,
-  },
-  {
-    topic: "AI",
-    title: "The one reasoning trick that makes Grok outperform almost everything",
-    body: "Chain-of-thought is old news. The real leap is reasoning effort control plus tool use in one pass. Mind-blowing example inside.",
-    image_url: null,
-    likes_count: 892,
-  },
-];
 
 export const GENERATION_TEMPLATES = [
   {
