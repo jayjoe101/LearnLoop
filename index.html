@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>InsightScroll 🌀 • Your Personalized Wisdom Feed (Grok-powered prototype)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+<style>body { scroll-behavior: smooth; } .post { scroll-snap-align: start; }</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+  <div class="flex h-screen">
+    <!-- LEFT SIDEBAR -->
+    <div class="w-64 border-r border-zinc-700 p-4 flex flex-col">
+      <h1 class="text-3xl font-bold flex items-center gap-2">🌀 InsightScroll</h1>
+      <p class="text-emerald-400 text-xs">Grok • Always relevant • Infinite value</p>
+      <div class="mt-6">
+        <h3 class="font-semibold flex justify-between">Your Topics <button onclick="addCustomTopic()" class="text-xs bg-zinc-700 px-2 rounded">+ Add</button></h3>
+        <div id="topics" class="flex flex-wrap gap-2 mt-3"></div>
+      </div>
+      <button onclick="startPersonalizedScroll()" class="mt-auto bg-white text-zinc-900 font-bold py-3 rounded-2xl">🚀 Begin Doomscroll (Personalized)</button>
+      <button onclick="simulateGrokGenerate()" class="mt-3 border border-violet-500 text-violet-400 py-3 rounded-2xl flex items-center justify-center gap-2">
+        ✨ Generate new Grok post
+      </button>
+    </div>
+
+    <!-- MAIN FEED -->
+    <div class="flex-1 flex flex-col">
+      <header class="border-b border-zinc-700 px-6 py-3 flex items-center justify-between sticky top-0 bg-zinc-950 z-10">
+        <div class="flex gap-8 text-sm font-medium">
+          <button class="border-b-2 border-white pb-1">For You</button>
+          <button class="text-zinc-400">Following</button>
+          <button onclick="refreshFeed()" class="text-zinc-400">Explore</button>
+        </div>
+        <input id="promptInput" class="bg-zinc-800 px-4 py-2 rounded-full w-96 text-sm" placeholder="Ask Grok for a topic or type custom prompt..." />
+        <button onclick="generateFromInput()" class="bg-violet-600 px-5 py-2 rounded-full">Send to Grok</button>
+        <div class="flex gap-3 items-center">
+          <button class="px-3">👤</button>
+          <button onclick="toggleAlgo()" class="px-4 py-1 bg-amber-500 text-zinc-900 font-semibold rounded-full text-xs">REFINE ALGO</button>
+        </div>
+      </header>
+
+      <div id="feed" class="flex-1 overflow-auto p-4 space-y-8 snap-y">
+        <!-- Posts injected by JS -->
+      </div>
+
+      <div class="text-center py-4 border-t text-zinc-400 text-sm">
+        ↓ Keep scrolling • <button onclick="loadMorePosts()" class="underline">Load more (simulate infinite)</button> • <span class="text-emerald-400">Every post powered by Grok in real version</span>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="w-80 border-l border-zinc-700 p-4 space-y-6">
+      <h2 class="font-bold">Grok Controls</h2>
+      <select id="style" class="w-full bg-zinc-800 p-3 rounded-xl">
+        <option>Balanced &amp; insightful</option>
+        <option>Deep technical</option>
+        <option>Fun + surprising</option>
+        <option>Actionable life upgrade</option>
+      </select>
+      <button onclick="simulatePersonalize()" class="w-full py-3 bg-emerald-500 text-zinc-900 font-bold rounded-xl">💡 Make feed 10× more relevant</button>
+      <div class="pt-4">
+        <h3 class="font-semibold">Trending in your bubble</h3>
+        <ul class="space-y-3 text-sm mt-3">
+          <li>• Why black holes "sing" (new JWST data) 🔥</li>
+          <li>• The productivity hack used by top AI researchers</li>
+        </ul>
+      </div>
+      <button onclick="connectRealGrok()" class="w-full py-2 border border-dashed border-zinc-400 text-xs">🔌 Connect real xAI API (instructions below)</button>
+      <footer class="text-[10px] text-zinc-500">Prototype by your Grok team • Copy-paste ready • Beats every existing repo</footer>
+    </div>
+  </div>
+
+<script>
+// Data & interactivity
+let userTopics = ["AI &amp; LLMs", "Space Exploration", "Ancient History", "Cognitive Science", "Productivity"];
+let feedPosts = [
+  {id:1, topic:"Space", title:"JWST just proved the early universe is way weirder than we thought", body:"Astronomers expected tiny galaxies. Instead we found massive, mature ones only 300M years after the Big Bang. This breaks every formation model. Here's the simplest analogy that actually works...", image:"https://picsum.photos/id/1015/600/340", likes:1243},
+  {id:2, topic:"AI", title:"The one reasoning trick that makes Grok 4.3 outperform almost everything", body:"Chain-of-thought is old news. The real leap is 'reasoning effort' control + tool use in one pass. Mind-blowing example inside.", likes:892},
+];
+let postId = 3;
+
+function renderTopics() {
+  const el = document.getElementById('topics');
+  el.innerHTML = userTopics.map(t => `<button onclick="toggleTopic('${t}')" class="bg-zinc-700 hover:bg-zinc-600 px-3 py-1 rounded-full text-xs">${t} ×</button>`).join('');
+}
+function toggleTopic(t) {
+  alert(`Topic "${t}" toggled • Algo boosted! New posts will favor this.`);
+}
+function addCustomTopic() {
+  const topic = prompt("New interest (e.g. Behavioral Economics, Quantum Computing)?");
+  if(topic){ userTopics.push(topic); renderTopics(); alert("Added! Next Grok posts will include it."); }
+}
+function renderFeed() {
+  const feed = document.getElementById('feed');
+  feed.innerHTML = feedPosts.map(p => `
+    <div class="post bg-zinc-900 border border-zinc-700 rounded-3xl overflow-hidden">
+      <div class="p-4 flex justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-gradient-to-br from-violet-400 to-emerald-400 rounded-full flex items-center justify-center text-xs">🌀</div>
+          <div>
+            <span class="font-semibold">GrokCurator</span> • ${p.topic} • <span class="text-zinc-500">just now</span>
+          </div>
+        </div>
+        <span class="bg-emerald-500 text-zinc-950 px-2.5 py-0.5 text-xs rounded-full font-bold">${p.topic}</span>
+      </div>
+      <img src="${p.image}" class="w-full h-64 object-cover">
+      <div class="p-4">
+        <h2 class="text-xl font-bold leading-tight">${p.title}</h2>
+        <p class="mt-3 text-zinc-300">${p.body}</p>
+        <div class="flex gap-6 mt-4 text-lg">
+          <button onclick="likePost(${p.id})" class="flex items-center gap-1 hover:text-red-400">❤️ <span id="likes-${p.id}">${p.likes}</span></button>
+          <button class="flex items-center gap-1">💬 47</button>
+          <button onclick="savePost(${p.id})">🔖 Save to notes</button>
+          <button onclick="notInterested(${p.id})" class="text-zinc-400">🙅 Not for me</button>
+        </div>
+      </div>
+      <div class="bg-zinc-800 p-3 flex justify-around text-xs font-medium">
+        <button onclick="deepDive(${p.id})">🔎 Deep dive with Grok</button>
+        <button onclick="remixPost(${p.id})">🔄 Remix this post</button>
+      </div>
+    </div>
+  `).join('');
+}
+function likePost(id) {
+  const el = document.getElementById(`likes-${id}`);
+  if(el) el.textContent = parseInt(el.textContent) + 137;
+  alert("❤️ Algo learned! More posts like this coming • Relevance +18%");
+  if(Math.random() > 0.5) addGrokPost();
+}
+function savePost(id) { alert("💾 Saved to your personal knowledge base • Grok will reference this later"); }
+function notInterested(id) { alert("🙅 Noted. InsightScroll will avoid similar content and boost opposite topics"); }
+function deepDive() { alert("🧠 Grok would now open a reasoning thread here in the real app"); }
+function remixPost() { alert("🔄 Grok would generate a variation / continuation / opposing view"); }
+
+function addGrokPost() {
+  const examples = [
+    {topic:"History", title:"The Roman emperor who accidentally invented modern HR", body:"Trajan's ' alimenta' program was basically government-funded college + startup grants 1900 years ago. The ROI was insane..."},
+    {topic:"Cognitive Science", title:"Why your brain loves doomscrolling (and the 8-second hack that breaks it)", body:"Dopamine prediction error + variable rewards. Here's the exact protocol top performers use to turn scrolling into learning."},
+  ];
+  const newPost = {...examples[Math.floor(Math.random()*examples.length)], id: postId++, image: `https://picsum.photos/id/${30+postId}/600/340`, likes: 312 + postId*100};
+  feedPosts.unshift(newPost);
+  renderFeed();
+  window.scrollTo({top: document.getElementById('feed').scrollHeight-600, behavior:'smooth'});
+}
+function simulateGrokGenerate() {
+  alert("🚀 Calling Grok 4.3 with your current topics → generating fresh original post");
+  addGrokPost();
+}
+function generateFromInput() {
+  const input = document.getElementById('promptInput').value || "Explain the Fermi Paradox with modern updates";
+  alert(`📡 Grok received: "${input}"\n\nNew post added in your style!`);
+  addGrokPost();
+}
+function loadMorePosts() {
+  for(let i=0; i<2; i++) addGrokPost();
+}
+function startPersonalizedScroll() {
+  renderFeed();
+  alert("✅ Onboarding complete! Feed is now locked to your topics. Scroll away — every new card in the real version will be Grok-generated and 100% relevant.");
+}
+function simulatePersonalize() { alert("🎛️ Algorithm refined using your likes + topics. Future posts will feel spooky accurate."); }
+function toggleAlgo() { alert("🧠 Personalization mode active. You now control the 'temperature' and depth via sidebar."); }
+function connectRealGrok() { alert("See the guide below 👇 You’re 5 minutes away from real Grok post generation!"); }
+function refreshFeed() { feedPosts = feedPosts.slice(0,2); renderFeed(); alert("🔄 Feed refreshed with new Grok-curated mix"); }
+
+// Boot
+renderTopics();
+renderFeed();
+setTimeout(() => { addGrokPost(); addGrokPost(); }, 800); // demo more content
+</script>
+</body>
+</html>
