@@ -1,11 +1,12 @@
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
-const WIKI_REQUEST_TIMEOUT_MS = 1_400;
-const THUMB_SIZE = 640;
+const WIKI_REQUEST_TIMEOUT_MS = 2_500;
+const THUMB_SIZE = 800;
 
 export type ImageContext = {
   topic: string;
   title: string;
+  subject?: string;
   links?: PostLink[];
   wiki_terms?: PostWikiTerm[];
 };
@@ -18,7 +19,18 @@ type WikimediaResponse = {
         thumbnail?: { source?: string };
         title?: string;
         missing?: boolean;
-        index?: number;
+      }
+    >;
+  };
+};
+
+type CommonsResponse = {
+  query?: {
+    pages?: Record<
+      string,
+      {
+        title?: string;
+        imageinfo?: Array<{ thumburl?: string; url?: string }>;
       }
     >;
   };
@@ -65,18 +77,44 @@ function buildTitleCandidates(ctx: ImageContext): string[] {
     .map((t) => t.term.trim())
     .filter(Boolean);
 
-  const candidates = [...fromLinks, ...fromWikiTerms];
+  const subject = ctx.subject?.trim();
+
+  const candidates = [
+    ...(subject ? [subject] : []),
+    ...fromLinks,
+    ...fromWikiTerms,
+    ctx.topic.replace(/[^\w\s&+-]/g, " ").trim(),
+  ];
 
   const seen = new Set<string>();
   return candidates.filter((c) => {
     const key = c.toLowerCase();
-    if (!c || seen.has(key)) return false;
+    if (!c || c.length < 2 || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 }
 
-/** One Wikipedia API round-trip for up to two article titles. */
+function buildSearchQuery(ctx: ImageContext): string {
+  const subject = ctx.subject?.trim();
+  if (subject) return subject;
+
+  const wikiTerm = ctx.wiki_terms?.[0]?.term?.trim();
+  if (wikiTerm) return wikiTerm;
+
+  const linkTitle = extractArticleTitlesFromLinks(ctx.links)[0];
+  if (linkTitle) return linkTitle;
+
+  const titleWords = ctx.title
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 4)
+    .join(" ");
+
+  return titleWords || ctx.topic;
+}
+
 async function fetchWikipediaImagesBatch(
   titles: string[]
 ): Promise<string[]> {
@@ -87,7 +125,7 @@ async function fetchWikipediaImagesBatch(
       action: "query",
       format: "json",
       origin: "*",
-      titles: titles.slice(0, 2).join("|"),
+      titles: titles.slice(0, 3).join("|"),
       prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: String(THUMB_SIZE),
@@ -119,24 +157,149 @@ async function fetchWikipediaImagesBatch(
   }
 }
 
-/** Fast path: best-guess article only, single batched Wikipedia request. */
+async function fetchWikipediaSearchImages(
+  search: string,
+  limit = 3
+): Promise<string[]> {
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      format: "json",
+      origin: "*",
+      generator: "search",
+      gsrsearch: search,
+      gsrlimit: String(limit),
+      prop: "pageimages",
+      piprop: "thumbnail",
+      pithumbsize: String(THUMB_SIZE),
+    });
+
+    const response = await fetch(
+      `https://en.wikipedia.org/w/api.php?${params}`,
+      {
+        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
+        next: { revalidate: 86400 },
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as WikimediaResponse;
+    const urls: string[] = [];
+
+    for (const page of Object.values(data.query?.pages ?? {})) {
+      const src = page.thumbnail?.source;
+      if (src) urls.push(src);
+    }
+
+    return urls;
+  } catch {
+    return [];
+  }
+}
+
+function isLikelyDecorativeCommonsFile(title: string): boolean {
+  const lower = title.toLowerCase();
+  return (
+    lower.includes("icon") ||
+    lower.includes("logo") ||
+    lower.includes("pictogram")
+  );
+}
+
+/** Wikimedia Commons search — many Wikipedia articles have no lead image. */
+async function fetchCommonsSearchImages(
+  search: string,
+  limit = 3
+): Promise<string[]> {
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      format: "json",
+      origin: "*",
+      generator: "search",
+      gsrsearch: search,
+      gsrnamespace: "6",
+      gsrlimit: String(Math.min(limit * 3, 12)),
+      prop: "imageinfo",
+      iiprop: "url",
+      iiurlwidth: String(THUMB_SIZE),
+    });
+
+    const response = await fetch(
+      `https://commons.wikimedia.org/w/api.php?${params}`,
+      {
+        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
+        next: { revalidate: 86400 },
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as CommonsResponse;
+    const urls: string[] = [];
+
+    for (const page of Object.values(data.query?.pages ?? {})) {
+      const title = page.title ?? "";
+      if (isLikelyDecorativeCommonsFile(title)) continue;
+
+      const src =
+        page.imageinfo?.[0]?.thumburl ?? page.imageinfo?.[0]?.url ?? null;
+      if (src) urls.push(src);
+      if (urls.length >= limit) break;
+    }
+
+    return urls;
+  } catch {
+    return [];
+  }
+}
+
+function appendUniqueUrls(
+  urls: string[],
+  seen: Set<string>,
+  incoming: string[],
+  limit: number
+): void {
+  for (const url of incoming) {
+    if (urls.length >= limit) return;
+    if (!seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+}
+
+/** Collect up to 3 unique thumbnails (Wikipedia batch, search, then Commons). */
+export async function fetchImageCandidates(
+  ctx: ImageContext,
+  limit = 3
+): Promise<string[]> {
+  const titles = buildTitleCandidates(ctx);
+  const search = buildSearchQuery(ctx);
+  const fromTitles = await fetchWikipediaImagesBatch(titles);
+
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  appendUniqueUrls(urls, seen, fromTitles, limit);
+
+  if (urls.length < limit) {
+    const [fromSearch, fromCommons] = await Promise.all([
+      fetchWikipediaSearchImages(search, limit - urls.length),
+      fetchCommonsSearchImages(search, limit - urls.length),
+    ]);
+    appendUniqueUrls(urls, seen, fromSearch, limit);
+    appendUniqueUrls(urls, seen, fromCommons, limit);
+  }
+
+  return urls.slice(0, limit);
+}
+
 export async function fetchFirstImageCandidate(
   ctx: ImageContext
 ): Promise<string | null> {
-  const titles = buildTitleCandidates(ctx);
-  if (titles.length === 0) return null;
-
-  const urls = await fetchWikipediaImagesBatch(titles.slice(0, 2));
+  const urls = await fetchImageCandidates(ctx, 1);
   return urls[0] ?? null;
-}
-
-export async function fetchImageCandidates(
-  ctx: ImageContext,
-  limit = 2
-): Promise<string[]> {
-  const titles = buildTitleCandidates(ctx).slice(0, limit);
-  const urls = await fetchWikipediaImagesBatch(titles);
-  return urls.slice(0, limit);
 }
 
 export async function fetchRelevantImage(ctx: ImageContext): Promise<string | null> {

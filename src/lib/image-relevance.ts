@@ -1,91 +1,97 @@
-import { fetchFirstImageCandidate, type ImageContext } from "@/lib/images";
-import { chatCompletion, parseJsonContent, VISION_MODEL } from "@/lib/xai-client";
+import { fetchImageCandidates, type ImageContext } from "@/lib/images";
+import { chatCompletion } from "@/lib/xai-client";
 
 export type PostImageContext = ImageContext & {
   body?: string;
 };
 
-const PIPELINE_BUDGET_MS = 5_500;
-const VISION_TIMEOUT_MS = 3_500;
+const VISION_TIMEOUT_MS = 4_000;
 
-async function evaluateImageRelevance(
+const VISION_MODELS = [
+  process.env.XAI_VISION_MODEL,
+  "grok-2-vision-1212",
+  "grok-vision-beta",
+  "grok-2-vision",
+].filter((m, i, a): m is string => Boolean(m) && a.indexOf(m) === i);
+
+function visionCheckEnabled(): boolean {
+  return process.env.IMAGE_VISION_CHECK === "true";
+}
+
+function parseYesNo(content: string): boolean {
+  const normalized = content.trim().toUpperCase();
+
+  if (
+    normalized.startsWith("NO") ||
+    /\bNOT RELEVANT\b/.test(normalized) ||
+    /\bUNRELATED\b/.test(normalized)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/** Optional soft check — only when IMAGE_VISION_CHECK=true. API failures → accept. */
+async function passesOptionalVisionCheck(
   imageUrl: string,
-  ctx: PostImageContext,
-  timeoutMs: number
-): Promise<boolean> {
-  const excerpt = (ctx.body ?? "").slice(0, 280);
-
-  const content = await chatCompletion({
-    model: VISION_MODEL,
-    temperature: 0.05,
-    maxTokens: 32,
-    timeoutMs,
-    jsonSchema: {
-      name: "image_relevance",
-      schema: {
-        type: "object",
-        properties: {
-          relevant: { type: "boolean" },
-        },
-        required: ["relevant"],
-        additionalProperties: false,
-      },
-    },
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: { url: imageUrl, detail: "low" },
-          },
-          {
-            type: "text",
-            text: `Title: ${ctx.title}
-Excerpt: ${excerpt}
-
-Is this image visually relevant to this specific post (not just the broad topic)?
-Return { "relevant": true } only if it clearly fits.`,
-          },
-        ],
-      },
-    ],
-  });
-
-  if (!content) return false;
-
-  const parsed = parseJsonContent<{ relevant?: boolean }>(content);
-  return parsed?.relevant === true;
-}
-
-async function fetchValidatedPostImageInner(
   ctx: PostImageContext
-): Promise<string | null> {
+): Promise<boolean> {
+  if (!visionCheckEnabled()) return true;
+
   const apiKey = process.env.XAI_API_KEY;
-  const imageUrl = await fetchFirstImageCandidate(ctx);
+  if (!apiKey) return true;
 
-  if (!imageUrl) return null;
-  if (!apiKey) return imageUrl;
+  const excerpt = (ctx.body ?? "").slice(0, 200);
 
-  const relevant = await evaluateImageRelevance(
-    imageUrl,
-    ctx,
-    VISION_TIMEOUT_MS
-  );
+  for (const model of VISION_MODELS) {
+    const content = await chatCompletion({
+      model,
+      temperature: 0,
+      maxTokens: 8,
+      timeoutMs: VISION_TIMEOUT_MS,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: { url: imageUrl, detail: "low" },
+            },
+            {
+              type: "text",
+              text: `Post: "${ctx.title}" (${ctx.topic})
+${excerpt ? `Snippet: ${excerpt}` : ""}
 
-  return relevant ? imageUrl : null;
+Could this image illustrate the post? Default YES — only reply NO if completely wrong (unrelated stock photo, logo, or random object).
+One word: YES or NO.`,
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!content) continue;
+    return parseYesNo(content);
+  }
+
+  return true;
 }
 
-/**
- * One Wikipedia pull + one vision check. Irrelevant or slow → null (imageless post).
- */
+/** Best Wikipedia thumbnail for the post. Vision gate is off unless IMAGE_VISION_CHECK=true. */
 export async function fetchValidatedPostImage(
   ctx: PostImageContext
 ): Promise<string | null> {
-  return Promise.race([
-    fetchValidatedPostImageInner(ctx),
-    new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), PIPELINE_BUDGET_MS)
-    ),
-  ]);
+  const candidates = await fetchImageCandidates(ctx, 3);
+  if (candidates.length === 0) return null;
+
+  if (!visionCheckEnabled()) {
+    return candidates[0];
+  }
+
+  for (const url of candidates) {
+    if (await passesOptionalVisionCheck(url, ctx)) return url;
+  }
+
+  return candidates[0];
 }

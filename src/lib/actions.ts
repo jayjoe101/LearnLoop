@@ -14,6 +14,7 @@ import {
   pickRotatingTopic,
 } from "@/lib/generation-context";
 import { personaToAuthorFields } from "@/lib/post-author";
+import { fetchValidatedPostImage } from "@/lib/image-relevance";
 import { attachPostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
@@ -213,10 +214,13 @@ async function insertGeneratedPost(
   const imageCtx = {
     topic: post.topic,
     title: post.title,
+    subject: post.subject,
     body: post.body,
     links: post.links,
     wiki_terms: post.wiki_terms,
   };
+
+  const imageUrl = await fetchValidatedPostImage(imageCtx);
 
   const { data: inserted, error } = await supabase
     .from("posts")
@@ -225,7 +229,7 @@ async function insertGeneratedPost(
       topic: post.topic,
       title: post.title,
       body: post.body,
-      image_url: null,
+      image_url: imageUrl,
       links: post.links,
       wiki_terms: post.wiki_terms,
       likes_count: 300 + Math.floor(Math.random() * 500),
@@ -239,7 +243,9 @@ async function insertGeneratedPost(
   if (error || !inserted) return null;
 
   const postId = inserted.id as string;
-  void attachPostImage(supabase, postId, imageCtx);
+  if (!imageUrl) {
+    void attachPostImage(supabase, postId, imageCtx);
+  }
 
   return mapRowToPost(inserted as Record<string, unknown>);
 }

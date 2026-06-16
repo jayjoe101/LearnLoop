@@ -6,22 +6,26 @@ import {
   type PostImageContext,
 } from "@/lib/image-relevance";
 
-/** Non-blocking: validate image in background; irrelevant images are dropped. */
-export async function attachPostImage(
+/** Background image attach — permissive validation, uses request-scoped client. */
+export function attachPostImage(
   supabase: SupabaseClient,
   postId: string,
   ctx: PostImageContext
-): Promise<null> {
+): null {
   after(async () => {
-    const image = await fetchValidatedPostImage(ctx);
-    if (!image) return;
+    try {
+      const image = await fetchValidatedPostImage(ctx);
+      if (!image) return;
 
-    await supabase
-      .from("posts")
-      .update({ image_url: image })
-      .eq("id", postId);
+      const { error } = await supabase
+        .from("posts")
+        .update({ image_url: image })
+        .eq("id", postId);
 
-    revalidatePath("/");
+      if (!error) revalidatePath("/");
+    } catch {
+      // imageless post — no user-facing error
+    }
   });
 
   return null;

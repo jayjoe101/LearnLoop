@@ -20,7 +20,7 @@ type Props = {
   index?: number;
 };
 
-const IMAGE_POLL_DELAYS_MS = [2000, 3000, 2500];
+const IMAGE_POLL_DELAYS_MS = [1500, 2000, 2500, 3000, 3500];
 
 export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
   const [isPending, startTransition] = useTransition();
