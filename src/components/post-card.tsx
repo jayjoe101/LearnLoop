@@ -29,7 +29,7 @@ export function PostCard({ post, interaction, feedStyle }: Props) {
   useEffect(() => {
     if (post.image_url) return;
 
-    const timer = window.setTimeout(() => router.refresh(), 3500);
+    const timer = window.setTimeout(() => router.refresh(), 2000);
     return () => window.clearTimeout(timer);
   }, [post.id, post.image_url, router]);
 

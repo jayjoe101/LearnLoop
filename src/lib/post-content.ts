@@ -1,4 +1,9 @@
-import { sanitizeExternalUrl, wikiUrlForTerm, type WikiSource } from "@/lib/wiki-links";
+import {
+  sanitizeExternalUrl,
+  wikipediaUrl,
+  wikiUrlForTerm,
+  type WikiSource,
+} from "@/lib/wiki-links";
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
 export type InlineSegment =
@@ -72,6 +77,36 @@ export function normalizePostLinks(
   }
 
   return normalized.slice(0, 3);
+}
+
+/** Guarantee a Wikipedia source — avoids expensive AI retries when the model omits one. */
+export function ensureWikipediaLink(
+  links: PostLink[],
+  topic: string,
+  wikiTerms: PostWikiTerm[]
+): PostLink[] {
+  if (links.some((l) => l.url.includes("wikipedia.org/wiki/"))) {
+    return links.slice(0, 3);
+  }
+
+  const term = wikiTerms[0]?.term ?? topic;
+  return [
+    ...links,
+    { label: `${term} on Wikipedia`, url: wikipediaUrl(term) },
+  ].slice(0, 3);
+}
+
+export function finalizePostLinks(
+  raw: Array<{ label?: string; url?: string }> | undefined,
+  topic: string,
+  wikiTerms: PostWikiTerm[]
+): PostLink[] {
+  const normalized = normalizePostLinks(raw);
+  if (normalized.length === 0) {
+    const term = wikiTerms[0]?.term ?? topic;
+    return [{ label: `${term} on Wikipedia`, url: wikipediaUrl(term) }];
+  }
+  return ensureWikipediaLink(normalized, topic, wikiTerms);
 }
 
 export function normalizeWikiTerms(

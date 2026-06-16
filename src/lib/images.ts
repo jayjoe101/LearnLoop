@@ -1,7 +1,8 @@
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
-const WIKIMEDIA_TIMEOUT_MS = 3_500;
-const SYNC_IMAGE_BUDGET_MS = 3_200;
+const WIKI_REQUEST_TIMEOUT_MS = 2_000;
+/** Brief sync race — post shows immediately; full fetch runs in background. */
+export const SYNC_IMAGE_BUDGET_MS = 450;
 
 export type ImageContext = {
   topic: string;
@@ -92,7 +93,7 @@ async function fetchWikipediaImageByTitle(title: string): Promise<string | null>
     const response = await fetch(
       `https://en.wikipedia.org/w/api.php?${params}`,
       {
-        signal: AbortSignal.timeout(WIKIMEDIA_TIMEOUT_MS),
+        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
         next: { revalidate: 86400 },
       }
     );
@@ -120,7 +121,7 @@ async function fetchWikipediaSearchImage(search: string): Promise<string | null>
       origin: "*",
       generator: "search",
       gsrsearch: search,
-      gsrlimit: "4",
+      gsrlimit: "3",
       prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: "900",
@@ -129,7 +130,7 @@ async function fetchWikipediaSearchImage(search: string): Promise<string | null>
     const response = await fetch(
       `https://en.wikipedia.org/w/api.php?${params}`,
       {
-        signal: AbortSignal.timeout(WIKIMEDIA_TIMEOUT_MS),
+        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
         next: { revalidate: 86400 },
       }
     );
@@ -149,30 +150,18 @@ async function fetchWikipediaSearchImage(search: string): Promise<string | null>
 }
 
 export async function fetchRelevantImage(ctx: ImageContext): Promise<string | null> {
-  const candidates = buildTitleCandidates(ctx);
+  const candidates = buildTitleCandidates(ctx).slice(0, 3);
 
-  for (const title of candidates) {
-    const direct = await fetchWikipediaImageByTitle(title);
-    if (direct) return direct;
+  if (candidates.length > 0) {
+    const parallel = await Promise.all(
+      candidates.map((title) => fetchWikipediaImageByTitle(title))
+    );
+    const hit = parallel.find(Boolean);
+    if (hit) return hit;
   }
 
-  const searchQueries = [
-    ctx.topic,
-    candidates[0],
-    `${ctx.topic} ${(ctx.wiki_terms ?? [])[0]?.term ?? ""}`.trim(),
-  ].filter(Boolean);
-
-  const seenQueries = new Set<string>();
-  for (const query of searchQueries) {
-    const key = query.toLowerCase();
-    if (seenQueries.has(key)) continue;
-    seenQueries.add(key);
-
-    const found = await fetchWikipediaSearchImage(query);
-    if (found) return found;
-  }
-
-  return null;
+  const search = candidates[0] ?? ctx.topic;
+  return fetchWikipediaSearchImage(search);
 }
 
 export async function resolvePostImage(

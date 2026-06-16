@@ -12,7 +12,7 @@ export async function fetchGenerationContext(
         .select("title")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(10),
       supabase
         .from("posts")
         .select("*", { count: "exact", head: true })

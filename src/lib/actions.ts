@@ -138,14 +138,13 @@ export async function completeOnboarding(
 
   if (profileError) return { error: profileError.message };
 
-  const recentTitles: string[] = [];
-  for (let i = 0; i < 2; i++) {
-    await generateNewPostForUser(user.id, unique, feedStyle, {
-      recentTitles: [...recentTitles],
-      focusTopic: pickRotatingTopic(unique, i),
-      onCreated: (title) => recentTitles.push(title),
-    });
-  }
+  await Promise.all(
+    [0, 1].map((i) =>
+      generateNewPostForUser(user.id, unique, feedStyle, {
+        focusTopic: pickRotatingTopic(unique, i),
+      })
+    )
+  );
 
   revalidatePath("/");
   return { success: true };
@@ -200,9 +199,7 @@ async function generateNewPostForUser(
 
   if (!error && inserted?.id) {
     options?.onCreated?.(post.title);
-    if (!imageUrl) {
-      schedulePostImage(inserted.id, imageCtx);
-    }
+    schedulePostImage(inserted.id, imageCtx, imageUrl);
   }
 }
 
@@ -285,8 +282,8 @@ export async function generateNewPost(prompt?: string) {
 
   if (error) return { error: error.message };
 
-  if (inserted?.id && !imageUrl) {
-    schedulePostImage(inserted.id, imageCtx);
+  if (inserted?.id) {
+    schedulePostImage(inserted.id, imageCtx, imageUrl);
   }
 
   revalidatePath("/");
@@ -294,9 +291,7 @@ export async function generateNewPost(prompt?: string) {
 }
 
 export async function loadMorePosts(count = 2) {
-  for (let i = 0; i < count; i++) {
-    await generateNewPost();
-  }
+  await Promise.all(Array.from({ length: count }, () => generateNewPost()));
 }
 
 export async function likePost(postId: string) {

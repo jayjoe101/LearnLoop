@@ -1,31 +1,27 @@
 import { pickRandomPersona, type Persona } from "@/lib/personas";
 import {
   enrichBodyWithWikiTerms,
-  normalizePostLinks,
+  finalizePostLinks,
   normalizeWikiTerms,
 } from "@/lib/post-content";
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 12_000;
-const MAX_ATTEMPTS = 3;
+const XAI_TIMEOUT_MS = 9_000;
+const MAX_ATTEMPTS = 2;
 
 const MODELS = [
   process.env.XAI_MODEL,
-  "grok-3-mini",
-  "grok-3-mini-fast",
   "grok-4-fast-non-reasoning",
+  "grok-3-mini-fast",
+  "grok-3-mini",
 ].filter((m, i, a): m is string => Boolean(m) && a.indexOf(m) === i);
 
 const STYLE_GUIDE: Record<FeedStyle, string> = {
-  "Balanced & insightful":
-    "Clear, curious, and substantive — like a sharp friend explaining something fascinating.",
-  "Deep technical":
-    "Explain the mechanism. Use precise language but stay readable. Name the system.",
-  "Fun + surprising":
-    "Lead with something unexpected. Counterintuitive hook, then the insight.",
-  "Actionable life upgrade":
-    "One concrete habit or mental model the reader can try today. No fluff.",
+  "Balanced & insightful": "Clear, curious, substantive.",
+  "Deep technical": "Explain mechanisms precisely but readably.",
+  "Fun + surprising": "Counterintuitive hook, then insight.",
+  "Actionable life upgrade": "One concrete takeaway the reader can try today.",
 };
 
 const POST_SCHEMA = {
@@ -38,17 +34,17 @@ const POST_SCHEMA = {
     title: {
       type: "string",
       description:
-        "Scroll-stopping headline under 90 characters. Clickbait-curious and irresistibly engaging about the ACTUAL topic — curiosity gap, bold claim, or 'wait, what?' hook. Must make the reader desperate to learn more. Honest, not misleading.",
+        "Scroll-stopping headline under 90 characters. Clickbait-curious about the ACTUAL topic — curiosity gap or bold claim. Honest, not misleading.",
     },
     body: {
       type: "string",
       description:
-        "2-4 short paragraphs separated by blank lines (\\n\\n). Include a concrete fact, example, or mechanism. Wrap technical terms in [[double brackets]] for wiki highlights.",
+        "2-4 short paragraphs separated by blank lines (\\n\\n). Concrete fact or mechanism. Wrap technical terms in [[double brackets]].",
     },
     links: {
       type: "array",
       description:
-        "1-3 real, reputable external sources. ALWAYS include at least one en.wikipedia.org/wiki/... URL about the core subject. Add news, papers, or docs when relevant. Full https URLs only.",
+        "1-3 real external sources. Prefer en.wikipedia.org/wiki/... for the core subject plus news or papers when relevant.",
       items: {
         type: "object",
         properties: {
@@ -63,8 +59,7 @@ const POST_SCHEMA = {
     },
     wiki_terms: {
       type: "array",
-      description:
-        "2-4 technical or domain-specific terms that appear in the body as [[term]] wiki highlights. Required for technical topics.",
+      description: "1-4 domain terms appearing as [[term]] in the body.",
       items: {
         type: "object",
         properties: {
@@ -139,41 +134,37 @@ function buildMessages(
   const interests =
     input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
   const avoid = input.recentTitles?.length
-    ? input.recentTitles.slice(0, 15).map((t) => `- ${t}`).join("\n")
+    ? input.recentTitles.slice(0, 8).map((t) => `- ${t}`).join("\n")
     : "None yet.";
 
   const task =
     input.prompt?.trim() ||
     `Write one original insight post focused on "${focus}". Surprise the reader with something specific they probably didn't know.`;
 
-  const varietyHint =
-    attempt > 0
-      ? `This is retry #${attempt + 1}. Pick a completely different angle and topic than before.`
-      : "";
-
   const technicalHint =
     input.style === "Deep technical" ||
     ["researcher", "engineer", "explorer", "skeptic"].includes(persona.id)
-      ? "This is a technical post: include 2-4 [[wiki-linked]] jargon terms and precise mechanisms."
-      : "Include at least 1 [[wiki-linked]] term when a concept benefits from a quick definition.";
+      ? "Technical post: 2-4 [[wiki-linked]] terms, precise mechanisms."
+      : "Include [[wiki-linked]] terms where helpful.";
+
+  const retryHint =
+    attempt > 0
+      ? "Retry: different angle and title than before."
+      : "";
 
   return [
     {
       role: "system" as const,
-      content: `You are ${persona.name} (${persona.role}) posting on InsightScroll as ${persona.handle}.
-${persona.voice}
-Feed tone setting: ${STYLE_GUIDE[input.style]}
-Every post must teach something specific. Ban generic self-help and recycled ideas.
-TITLE RULE: Write headlines that feel like premium clickbait about the real topic — punchy, provocative, specific. Think "I NEED to know this" not "here is an overview of X".
-${technicalHint}
-Always attach 1-3 real external links. At least one MUST be a Wikipedia article URL for the main subject. Use [[term]] markers in the body for wiki highlights. ${varietyHint}`.trim(),
+      content: `${persona.name} (${persona.role}) on InsightScroll as ${persona.handle}. ${persona.voice}
+Tone: ${STYLE_GUIDE[input.style]}. Teach something specific — no generic fluff.
+Title: premium clickbait about the real topic — make readers NEED to click.
+${technicalHint} Include 1-3 real links (Wikipedia for core subject). ${retryHint}`.trim(),
     },
     {
       role: "user" as const,
-      content: `Reader interests: ${interests}
-Focus this post on: ${focus}
-
-Do NOT repeat or closely paraphrase these existing post titles:
+      content: `Interests: ${interests}
+Focus: ${focus}
+Avoid repeating these titles:
 ${avoid}
 
 ${task}`,
@@ -198,7 +189,7 @@ async function requestPost(
       model,
       messages,
       temperature,
-      max_tokens: 320,
+      max_tokens: 300,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -211,66 +202,78 @@ async function requestPost(
   });
 }
 
+function parseGeneratedContent(
+  content: string,
+  input: GeneratePostInput
+): Omit<GeneratedPost, "persona"> | null {
+  let parsed: Partial<GeneratedPost>;
+  try {
+    parsed = JSON.parse(content) as Partial<GeneratedPost>;
+  } catch {
+    return null;
+  }
+
+  if (!parsed.title?.trim() || !parsed.body?.trim()) return null;
+
+  const title = parsed.title.trim();
+  const body = parsed.body.trim();
+  const topic =
+    parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic);
+
+  if (body.length < 80) return null;
+  if (isTooSimilar(title, input.recentTitles ?? [])) return null;
+
+  const wiki_terms = normalizeWikiTerms(
+    parsed.wiki_terms as Array<{ term?: string }> | undefined
+  );
+  const links = finalizePostLinks(
+    parsed.links as Array<{ label?: string; url?: string }> | undefined,
+    topic,
+    wiki_terms
+  );
+
+  return {
+    topic,
+    title,
+    body: enrichBodyWithWikiTerms(body, wiki_terms),
+    links,
+    wiki_terms,
+  };
+}
+
 async function callXaiOnce(
   apiKey: string,
   input: GeneratePostInput,
   persona: Persona,
   attempt: number
 ): Promise<GeneratedPost | null> {
-  const temperature = 0.78 + attempt * 0.08;
+  const temperature = 0.75 + attempt * 0.1;
   const messages = buildMessages(input, persona, attempt);
 
-  for (const model of MODELS) {
-    const response = await requestPost(apiKey, model, messages, temperature);
+  for (let i = 0; i < MODELS.length; i++) {
+    const model = MODELS[i];
+    let response: Response;
+
+    try {
+      response = await requestPost(apiKey, model, messages, temperature);
+    } catch {
+      if (i < MODELS.length - 1) continue;
+      return null;
+    }
+
     if (!response.ok) {
-      if (response.status !== 400 && response.status !== 404) break;
-      continue;
+      if (response.status === 400 || response.status === 404) continue;
+      return null;
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content as string | undefined;
-    if (!content) continue;
+    if (!content) return null;
 
-    let parsed: Partial<GeneratedPost>;
-    try {
-      parsed = JSON.parse(content) as Partial<GeneratedPost>;
-    } catch {
-      continue;
-    }
+    const result = parseGeneratedContent(content, input);
+    if (!result) return null;
 
-    if (!parsed.title?.trim() || !parsed.body?.trim()) continue;
-
-    const title = parsed.title.trim();
-    const body = parsed.body.trim();
-
-    if (body.length < 80) continue;
-
-    if (isTooSimilar(title, input.recentTitles ?? [])) continue;
-
-    const links = normalizePostLinks(
-      parsed.links as Array<{ label?: string; url?: string }> | undefined
-    );
-    const wiki_terms = normalizeWikiTerms(
-      parsed.wiki_terms as Array<{ term?: string }> | undefined
-    );
-
-    if (links.length === 0) continue;
-
-    const hasWikipediaLink = links.some((l) =>
-      l.url.includes("wikipedia.org/wiki/")
-    );
-    if (!hasWikipediaLink) continue;
-
-    const enrichedBody = enrichBodyWithWikiTerms(body, wiki_terms);
-
-    return {
-      topic: parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic),
-      title,
-      body: enrichedBody,
-      links,
-      wiki_terms,
-      persona,
-    };
+    return { ...result, persona };
   }
 
   return null;
@@ -285,12 +288,8 @@ export async function generatePost(
 
   if (apiKey) {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      try {
-        const result = await callXaiOnce(apiKey, input, persona, attempt);
-        if (result) return result;
-      } catch {
-        // try next attempt
-      }
+      const result = await callXaiOnce(apiKey, input, persona, attempt);
+      if (result) return result;
     }
   }
 
@@ -328,18 +327,14 @@ function buildFallbackPost(
   }
 
   const wikiTerm = focus.split(" ")[0] ?? focus;
+  const wiki_terms = [{ term: wikiTerm }];
 
   return {
     topic: focus,
     title,
     body: `Researchers and practitioners in [[${wikiTerm}]] keep running into the same blind spot: we assume the obvious explanation is complete.\n\n${angle.charAt(0).toUpperCase() + angle.slice(1)} offers a sharper lens — and it changes what you'd predict next. Worth sitting with for a minute before you scroll on.`,
-    links: [
-      {
-        label: `${focus} overview`,
-        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(wikiTerm.replace(/\s+/g, "_"))}`,
-      },
-    ],
-    wiki_terms: [{ term: wikiTerm }],
+    links: finalizePostLinks([], focus, wiki_terms),
+    wiki_terms,
     persona,
   };
 }
