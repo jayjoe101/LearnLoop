@@ -15,6 +15,10 @@ export type Post = {
   comments_count: number;
   source: "grok" | "seed" | "remix";
   prompt: string | null;
+  persona_id: string | null;
+  author_name: string | null;
+  author_role: string | null;
+  author_handle: string | null;
   created_at: string;
 };
 

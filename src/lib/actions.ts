@@ -6,6 +6,7 @@ import {
   fetchGenerationContext,
   pickRotatingTopic,
 } from "@/lib/generation-context";
+import { personaToAuthorFields } from "@/lib/post-author";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -175,6 +176,7 @@ async function generateNewPostForUser(
       likes_count: 300 + Math.floor(Math.random() * 500),
       source: "grok",
       prompt: options?.prompt ?? null,
+      ...personaToAuthorFields(post.persona),
     })
     .select("id")
     .single();
@@ -247,6 +249,7 @@ export async function generateNewPost(prompt?: string) {
       likes_count: 300 + Math.floor(Math.random() * 500),
       source: "grok",
       prompt: prompt ?? null,
+      ...personaToAuthorFields(post.persona),
     })
     .select("id")
     .single();

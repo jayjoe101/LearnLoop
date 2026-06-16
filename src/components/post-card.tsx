@@ -9,6 +9,8 @@ import {
   savePost,
 } from "@/lib/actions";
 import { BookmarkIcon, HeartIcon } from "@/components/icons";
+import { PostAuthor } from "@/components/post-author";
+import { resolvePostAuthor } from "@/lib/post-author";
 import type { Post, PostInteraction } from "@/lib/types";
 
 type Props = {
@@ -16,21 +18,21 @@ type Props = {
   interaction?: PostInteraction;
 };
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
 export function PostCard({ post, interaction }: Props) {
   const [isPending, startTransition] = useTransition();
+  const author = resolvePostAuthor(post);
 
   return (
     <article className="post-card group">
+      <PostAuthor
+        name={author.name}
+        role={author.role}
+        handle={author.handle}
+        accent={author.accent}
+        topic={post.topic}
+        createdAt={post.created_at}
+      />
+
       {post.image_url && (
         <div className="relative mb-5 aspect-[16/9] overflow-hidden rounded-lg bg-white/[0.02]">
           <Image
@@ -42,12 +44,6 @@ export function PostCard({ post, interaction }: Props) {
           />
         </div>
       )}
-
-      <div className="mb-2 flex items-center gap-2 text-xs text-zinc-500">
-        <span className="font-medium text-zinc-400">{post.topic}</span>
-        <span>·</span>
-        <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
-      </div>
 
       <h2 className="text-xl font-semibold leading-snug tracking-tight text-zinc-50 sm:text-2xl">
         {post.title}

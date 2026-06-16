@@ -1,3 +1,4 @@
+import { pickRandomPersona, type Persona } from "@/lib/personas";
 import type { FeedStyle } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
@@ -56,6 +57,7 @@ export type GeneratedPost = {
   topic: string;
   title: string;
   body: string;
+  persona: Persona;
 };
 
 function normalizeTitle(title: string): string {
@@ -91,7 +93,11 @@ function pickFocusTopic(topics: string[], explicit?: string): string {
   return topics[Math.floor(Math.random() * topics.length)];
 }
 
-function buildMessages(input: GeneratePostInput, attempt: number) {
+function buildMessages(
+  input: GeneratePostInput,
+  persona: Persona,
+  attempt: number
+) {
   const focus = pickFocusTopic(input.topics, input.focusTopic);
   const interests =
     input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
@@ -111,13 +117,15 @@ function buildMessages(input: GeneratePostInput, attempt: number) {
   return [
     {
       role: "system" as const,
-      content: `You are the editor of InsightScroll, a premium learning feed. Every post must teach something specific and memorable. Ban generic self-help, vague platitudes, and recycled ideas. ${STYLE_GUIDE[input.style]} ${varietyHint}`.trim(),
+      content: `You are ${persona.name} (${persona.role}) posting on InsightScroll as ${persona.handle}.
+${persona.voice}
+Feed tone setting: ${STYLE_GUIDE[input.style]}
+Every post must teach something specific. Ban generic self-help and recycled ideas. ${varietyHint}`.trim(),
     },
     {
       role: "user" as const,
-      content: `User interests: ${interests}
+      content: `Reader interests: ${interests}
 Focus this post on: ${focus}
-Tone: ${input.style}
 
 Do NOT repeat or closely paraphrase these existing post titles:
 ${avoid}
@@ -160,10 +168,11 @@ async function requestPost(
 async function callXaiOnce(
   apiKey: string,
   input: GeneratePostInput,
+  persona: Persona,
   attempt: number
 ): Promise<GeneratedPost | null> {
   const temperature = 0.78 + attempt * 0.08;
-  const messages = buildMessages(input, attempt);
+  const messages = buildMessages(input, persona, attempt);
 
   for (const model of MODELS) {
     const response = await requestPost(apiKey, model, messages, temperature);
@@ -196,6 +205,7 @@ async function callXaiOnce(
       topic: parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic),
       title,
       body,
+      persona,
     };
   }
 
@@ -207,11 +217,12 @@ export async function generatePost(
 ): Promise<GeneratedPost> {
   const apiKey = process.env.XAI_API_KEY;
   const recentTitles = input.recentTitles ?? [];
+  const persona = pickRandomPersona();
 
   if (apiKey) {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
-        const result = await callXaiOnce(apiKey, input, attempt);
+        const result = await callXaiOnce(apiKey, input, persona, attempt);
         if (result) return result;
       } catch {
         // try next attempt
@@ -219,12 +230,13 @@ export async function generatePost(
     }
   }
 
-  return buildFallbackPost(input, recentTitles);
+  return buildFallbackPost(input, recentTitles, persona);
 }
 
 function buildFallbackPost(
   input: GeneratePostInput,
-  recentTitles: string[]
+  recentTitles: string[],
+  persona: Persona
 ): GeneratedPost {
   const focus = pickFocusTopic(input.topics, input.focusTopic);
   const angles = [
@@ -248,5 +260,6 @@ function buildFallbackPost(
     topic: focus,
     title,
     body: `Researchers and practitioners in ${focus} keep running into the same blind spot: we assume the obvious explanation is complete. ${angle.charAt(0).toUpperCase() + angle.slice(1)} offers a sharper lens — and it changes what you'd predict next. Worth sitting with for a minute before you scroll on.`,
+    persona,
   };
 }
