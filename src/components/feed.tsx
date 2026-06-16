@@ -4,15 +4,16 @@ import { useState, useTransition } from "react";
 import { addTopic, generateNewPost, loadMorePosts, removeTopic } from "@/lib/actions";
 import { PostCard } from "@/components/post-card";
 import { PlusIcon, SparkIcon } from "@/components/icons";
-import type { Post, PostInteraction, Topic } from "@/lib/types";
+import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
 
 type Props = {
   posts: Post[];
   topics: Topic[];
   interactions: Record<string, PostInteraction>;
+  feedStyle?: FeedStyle;
 };
 
-export function Feed({ posts, topics, interactions }: Props) {
+export function Feed({ posts, topics, interactions, feedStyle }: Props) {
   const [prompt, setPrompt] = useState("");
   const [topicInput, setTopicInput] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -158,6 +159,7 @@ export function Feed({ posts, topics, interactions }: Props) {
                   key={post.id}
                   post={post}
                   interaction={interactions[post.id]}
+                  feedStyle={feedStyle}
                 />
               ))}
             </div>

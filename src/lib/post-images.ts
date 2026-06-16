@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { resolvePostImage } from "@/lib/images";
+import { fetchRelevantImage } from "@/lib/images";
 import { createClient } from "@/lib/supabase/server";
 
 /** Attach a topic-relevant image after the post is live — off the critical path. */
@@ -10,7 +10,7 @@ export function schedulePostImage(
   title: string
 ) {
   after(async () => {
-    const image = await resolvePostImage(topic, title);
+    const image = await fetchRelevantImage(topic, title);
     if (!image) return;
 
     const supabase = await createClient();

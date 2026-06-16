@@ -1,5 +1,10 @@
 import { pickRandomPersona, type Persona } from "@/lib/personas";
-import type { FeedStyle } from "@/lib/types";
+import {
+  enrichBodyWithWikiTerms,
+  normalizePostLinks,
+  normalizeWikiTerms,
+} from "@/lib/post-content";
+import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 const XAI_TIMEOUT_MS = 12_000;
@@ -38,10 +43,40 @@ const POST_SCHEMA = {
     body: {
       type: "string",
       description:
-        "3-4 sentences. Include a concrete fact, example, or mechanism. Teach something real.",
+        "2-4 short paragraphs separated by blank lines (\\n\\n). Include a concrete fact, example, or mechanism. Wrap technical terms in [[double brackets]] for wiki highlights.",
+    },
+    links: {
+      type: "array",
+      description:
+        "1-3 real, reputable external sources (news, papers, docs, .edu, .gov). Full https URLs only.",
+      items: {
+        type: "object",
+        properties: {
+          label: { type: "string", description: "Short source name" },
+          url: { type: "string", description: "Full https URL" },
+        },
+        required: ["label", "url"],
+        additionalProperties: false,
+      },
+      minItems: 1,
+      maxItems: 3,
+    },
+    wiki_terms: {
+      type: "array",
+      description:
+        "2-4 technical or domain-specific terms that appear in the body as [[term]] wiki highlights. Required for technical topics.",
+      items: {
+        type: "object",
+        properties: {
+          term: { type: "string" },
+        },
+        required: ["term"],
+        additionalProperties: false,
+      },
+      maxItems: 4,
     },
   },
-  required: ["topic", "title", "body"],
+  required: ["topic", "title", "body", "links", "wiki_terms"],
   additionalProperties: false,
 } as const;
 
@@ -57,6 +92,8 @@ export type GeneratedPost = {
   topic: string;
   title: string;
   body: string;
+  links: PostLink[];
+  wiki_terms: PostWikiTerm[];
   persona: Persona;
 };
 
@@ -114,13 +151,21 @@ function buildMessages(
       ? `This is retry #${attempt + 1}. Pick a completely different angle and topic than before.`
       : "";
 
+  const technicalHint =
+    input.style === "Deep technical" ||
+    ["researcher", "engineer", "deep-diver", "skeptic"].includes(persona.id)
+      ? "This is a technical post: include 2-4 [[wiki-linked]] jargon terms and precise mechanisms."
+      : "Include at least 1 [[wiki-linked]] term when a concept benefits from a quick definition.";
+
   return [
     {
       role: "system" as const,
       content: `You are ${persona.name} (${persona.role}) posting on InsightScroll as ${persona.handle}.
 ${persona.voice}
 Feed tone setting: ${STYLE_GUIDE[input.style]}
-Every post must teach something specific. Ban generic self-help and recycled ideas. ${varietyHint}`.trim(),
+Every post must teach something specific. Ban generic self-help and recycled ideas.
+${technicalHint}
+Always attach 1-3 real external links readers can follow. Use [[term]] markers in the body for wiki highlights. ${varietyHint}`.trim(),
     },
     {
       role: "user" as const,
@@ -201,10 +246,23 @@ async function callXaiOnce(
 
     if (isTooSimilar(title, input.recentTitles ?? [])) continue;
 
+    const links = normalizePostLinks(
+      parsed.links as Array<{ label?: string; url?: string }> | undefined
+    );
+    const wiki_terms = normalizeWikiTerms(
+      parsed.wiki_terms as Array<{ term?: string }> | undefined
+    );
+
+    if (links.length === 0) continue;
+
+    const enrichedBody = enrichBodyWithWikiTerms(body, wiki_terms);
+
     return {
       topic: parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic),
       title,
-      body,
+      body: enrichedBody,
+      links,
+      wiki_terms,
       persona,
     };
   }
@@ -256,10 +314,19 @@ function buildFallbackPost(
     tries++;
   }
 
+  const wikiTerm = focus.split(" ")[0] ?? focus;
+
   return {
     topic: focus,
     title,
-    body: `Researchers and practitioners in ${focus} keep running into the same blind spot: we assume the obvious explanation is complete. ${angle.charAt(0).toUpperCase() + angle.slice(1)} offers a sharper lens — and it changes what you'd predict next. Worth sitting with for a minute before you scroll on.`,
+    body: `Researchers and practitioners in [[${wikiTerm}]] keep running into the same blind spot: we assume the obvious explanation is complete.\n\n${angle.charAt(0).toUpperCase() + angle.slice(1)} offers a sharper lens — and it changes what you'd predict next. Worth sitting with for a minute before you scroll on.`,
+    links: [
+      {
+        label: `${focus} overview`,
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(wikiTerm.replace(/\s+/g, "_"))}`,
+      },
+    ],
+    wiki_terms: [{ term: wikiTerm }],
     persona,
   };
 }

@@ -28,6 +28,185 @@ body {
 
 .post-card {
   scroll-snap-align: start;
+  padding-bottom: 0.5rem;
+}
+
+.post-image-frame {
+  position: relative;
+  margin-bottom: 1.25rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.post-image-placeholder {
+  position: relative;
+  margin-bottom: 1.25rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  animation: post-image-pulse 2.4s ease-in-out infinite;
+}
+
+.post-image-placeholder-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #52525b;
+}
+
+@keyframes post-image-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.post-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: #fafafa;
+}
+
+@media (min-width: 640px) {
+  .post-title {
+    font-size: 1.55rem;
+  }
+}
+
+.post-prose {
+  margin-top: 1rem;
+}
+
+.post-prose-lead,
+.post-prose-paragraph {
+  font-size: 1.02rem;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  color: #a1a1aa;
+}
+
+.post-prose-lead {
+  color: #d4d4d8;
+  font-size: 1.06rem;
+}
+
+.post-prose-paragraph + .post-prose-paragraph,
+.post-prose-lead + .post-prose-paragraph {
+  margin-top: 1rem;
+}
+
+.post-wiki-link {
+  display: inline;
+  border-bottom: 1px dashed rgba(129, 140, 248, 0.55);
+  padding-bottom: 0.05rem;
+  color: #c7d2fe;
+  text-decoration: none;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.post-wiki-link:hover {
+  color: #e0e7ff;
+  border-bottom-color: rgba(165, 180, 252, 0.9);
+}
+
+.post-wiki-link-icon {
+  margin-left: 0.15rem;
+  font-size: 0.65rem;
+  opacity: 0.55;
+}
+
+.post-inline-link {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  color: #e4e4e7;
+  text-decoration: none;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.post-inline-link:hover {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.45);
+}
+
+.post-sources {
+  margin-top: 1.35rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.post-sources-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #52525b;
+}
+
+.post-sources-list {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  list-style: none;
+  padding: 0;
+}
+
+.post-source-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.55rem 0.75rem;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.post-source-link:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.post-source-link-label {
+  font-size: 0.8rem;
+  color: #d4d4d8;
+}
+
+.post-source-link-host {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  color: #71717a;
+}
+
+.post-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 1rem;
 }
 
 /* Onboarding */

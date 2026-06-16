@@ -7,6 +7,7 @@ import {
   pickRotatingTopic,
 } from "@/lib/generation-context";
 import { personaToAuthorFields } from "@/lib/post-author";
+import { resolvePostImage } from "@/lib/images";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -80,8 +81,14 @@ export async function getFeedData(): Promise<{
       }
     : null;
 
+  const posts = ((postsRes.data ?? []) as Post[]).map((post) => ({
+    ...post,
+    links: post.links ?? [],
+    wiki_terms: post.wiki_terms ?? [],
+  }));
+
   return {
-    posts: (postsRes.data ?? []) as Post[],
+    posts,
     topics: (topicsRes.data ?? []) as Topic[],
     profile,
     interactions,
@@ -165,6 +172,8 @@ async function generateNewPostForUser(
     focusTopic: options?.focusTopic,
   });
 
+  const imageUrl = await resolvePostImage(post.topic, post.title);
+
   const { data: inserted, error } = await supabase
     .from("posts")
     .insert({
@@ -172,7 +181,9 @@ async function generateNewPostForUser(
       topic: post.topic,
       title: post.title,
       body: post.body,
-      image_url: null,
+      image_url: imageUrl,
+      links: post.links,
+      wiki_terms: post.wiki_terms,
       likes_count: 300 + Math.floor(Math.random() * 500),
       source: "grok",
       prompt: options?.prompt ?? null,
@@ -183,7 +194,9 @@ async function generateNewPostForUser(
 
   if (!error && inserted?.id) {
     options?.onCreated?.(post.title);
-    schedulePostImage(inserted.id, post.topic, post.title);
+    if (!imageUrl) {
+      schedulePostImage(inserted.id, post.topic, post.title);
+    }
   }
 }
 
@@ -238,6 +251,8 @@ export async function generateNewPost(prompt?: string) {
     focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount),
   });
 
+  const imageUrl = await resolvePostImage(post.topic, post.title);
+
   const { data: inserted, error } = await supabase
     .from("posts")
     .insert({
@@ -245,7 +260,9 @@ export async function generateNewPost(prompt?: string) {
       topic: post.topic,
       title: post.title,
       body: post.body,
-      image_url: null,
+      image_url: imageUrl,
+      links: post.links,
+      wiki_terms: post.wiki_terms,
       likes_count: 300 + Math.floor(Math.random() * 500),
       source: "grok",
       prompt: prompt ?? null,
@@ -256,7 +273,7 @@ export async function generateNewPost(prompt?: string) {
 
   if (error) return { error: error.message };
 
-  if (inserted?.id) {
+  if (inserted?.id && !imageUrl) {
     schedulePostImage(inserted.id, post.topic, post.title);
   }
 

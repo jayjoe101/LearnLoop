@@ -4,6 +4,15 @@ export type FeedStyle =
   | "Fun + surprising"
   | "Actionable life upgrade";
 
+export type PostLink = {
+  label: string;
+  url: string;
+};
+
+export type PostWikiTerm = {
+  term: string;
+};
+
 export type Post = {
   id: string;
   user_id: string;
@@ -19,6 +28,8 @@ export type Post = {
   author_name: string | null;
   author_role: string | null;
   author_handle: string | null;
+  links: PostLink[] | null;
+  wiki_terms: PostWikiTerm[] | null;
   created_at: string;
 };
 

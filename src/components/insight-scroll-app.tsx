@@ -20,7 +20,12 @@ export function InsightScrollApp({
   return (
     <div className="flex min-h-screen">
       <AppSidebar topics={topics} profile={profile} />
-      <Feed posts={posts} topics={topics} interactions={interactions} />
+      <Feed
+        posts={posts}
+        topics={topics}
+        interactions={interactions}
+        feedStyle={profile?.feed_style}
+      />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
 import {
   generateNewPost,
   likePost,
@@ -10,17 +11,27 @@ import {
 } from "@/lib/actions";
 import { BookmarkIcon, HeartIcon } from "@/components/icons";
 import { PostAuthor } from "@/components/post-author";
+import { PostBody } from "@/components/post-body";
 import { resolvePostAuthor } from "@/lib/post-author";
-import type { Post, PostInteraction } from "@/lib/types";
+import type { FeedStyle, Post, PostInteraction } from "@/lib/types";
 
 type Props = {
   post: Post;
   interaction?: PostInteraction;
+  feedStyle?: FeedStyle;
 };
 
-export function PostCard({ post, interaction }: Props) {
+export function PostCard({ post, interaction, feedStyle }: Props) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const author = resolvePostAuthor(post);
+
+  useEffect(() => {
+    if (post.image_url) return;
+
+    const timer = window.setTimeout(() => router.refresh(), 3500);
+    return () => window.clearTimeout(timer);
+  }, [post.id, post.image_url, router]);
 
   return (
     <article className="post-card group">
@@ -33,25 +44,33 @@ export function PostCard({ post, interaction }: Props) {
         createdAt={post.created_at}
       />
 
-      {post.image_url && (
-        <div className="relative mb-5 aspect-[16/9] overflow-hidden rounded-lg bg-white/[0.02]">
+      {post.image_url ? (
+        <div className="post-image-frame">
           <Image
             src={post.image_url}
             alt=""
             fill
-            className="object-cover transition duration-500 group-hover:scale-[1.02]"
+            className="object-cover transition duration-700 group-hover:scale-[1.02]"
             sizes="(max-width: 640px) 100vw, 640px"
           />
         </div>
+      ) : (
+        <div className="post-image-placeholder" aria-hidden>
+          <span className="post-image-placeholder-label">{post.topic}</span>
+        </div>
       )}
 
-      <h2 className="text-xl font-semibold leading-snug tracking-tight text-zinc-50 sm:text-2xl">
-        {post.title}
-      </h2>
+      <h2 className="post-title">{post.title}</h2>
 
-      <p className="mt-3 text-[15px] leading-relaxed text-zinc-400">{post.body}</p>
+      <PostBody
+        body={post.body}
+        links={post.links}
+        wikiTerms={post.wiki_terms}
+        feedStyle={feedStyle}
+        personaId={post.persona_id}
+      />
 
-      <div className="mt-5 flex items-center gap-4 border-t border-white/[0.06] pt-4">
+      <div className="post-actions">
         <button
           type="button"
           disabled={isPending || interaction?.liked}
