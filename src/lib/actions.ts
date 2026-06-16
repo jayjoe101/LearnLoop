@@ -15,6 +15,7 @@ import {
 import { personaToAuthorFields } from "@/lib/post-author";
 import { schedulePostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
+import { pickConcreteSubject } from "@/lib/topic-subjects";
 import {
   type FeedStyle,
   type Post,
@@ -244,6 +245,11 @@ async function createUniquePost(
   let fingerprints = [...options.recentFingerprints];
 
   for (let attempt = 0; attempt < MAX_DEDUP_RETRIES; attempt++) {
+    const focusTopic =
+      options.focusTopic ??
+      pickRotatingTopic(options.topicNames, options.postCount + attempt);
+    const subjectIndex = options.postCount + attempt;
+
     const post = await generatePost(
       {
         prompt: options.prompt,
@@ -251,9 +257,11 @@ async function createUniquePost(
         style: options.style,
         recentTitles: titles,
         recentFingerprints: fingerprints,
-        focusTopic:
-          options.focusTopic ??
-          pickRotatingTopic(options.topicNames, options.postCount + attempt),
+        focusTopic,
+        concreteSubject: focusTopic
+          ? pickConcreteSubject(focusTopic, subjectIndex)
+          : undefined,
+        subjectIndex,
       },
       attempt
     );

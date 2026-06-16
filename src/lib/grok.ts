@@ -1,6 +1,10 @@
 import { isDuplicateContent, normalizeTitleKey } from "@/lib/dedup";
 import { pickRandomPersona, type Persona } from "@/lib/personas";
 import {
+  isMetaTopicPost,
+  pickConcreteSubject,
+} from "@/lib/topic-subjects";
+import {
   enrichBodyWithWikiTerms,
   finalizePostLinks,
   normalizeWikiTerms,
@@ -28,17 +32,23 @@ const POST_SCHEMA = {
   properties: {
     topic: {
       type: "string",
-      description: "Short topic label from the user's interests",
+      description:
+        "The user's interest-area label (e.g. Physics) — NOT the post subject itself.",
+    },
+    subject: {
+      type: "string",
+      description:
+        "The specific concept, mechanism, discovery, or story INSIDE the interest area. Must NOT be the interest label itself or a generic overview of it.",
     },
     title: {
       type: "string",
       description:
-        "Scroll-stopping headline under 90 characters. Clickbait-curious about the ACTUAL topic — curiosity gap or bold claim. Honest, not misleading.",
+        "Scroll-stopping headline under 90 characters about the SPECIFIC SUBJECT — not a meta post about the interest label. Curiosity gap or bold claim. Honest, not misleading.",
     },
     body: {
       type: "string",
       description:
-        "2-4 short paragraphs separated by blank lines (\\n\\n). Concrete fact or mechanism. Wrap technical terms in [[double brackets]].",
+        "2-4 short paragraphs about the specific subject. Teach a concrete fact or mechanism. Never write 'what is X' overviews of the interest label. Wrap technical terms in [[double brackets]].",
     },
     links: {
       type: "array",
@@ -70,7 +80,7 @@ const POST_SCHEMA = {
       maxItems: 4,
     },
   },
-  required: ["topic", "title", "body", "links", "wiki_terms"],
+  required: ["topic", "subject", "title", "body", "links", "wiki_terms"],
   additionalProperties: false,
 } as const;
 
@@ -81,6 +91,8 @@ export type GeneratePostInput = {
   recentTitles?: string[];
   recentFingerprints?: string[];
   focusTopic?: string;
+  concreteSubject?: string;
+  subjectIndex?: number;
 };
 
 export type GeneratedPost = {
@@ -123,6 +135,9 @@ function buildMessages(
   attempt: number
 ) {
   const focus = pickFocusTopic(input.topics, input.focusTopic);
+  const subject =
+    input.concreteSubject ??
+    pickConcreteSubject(focus, input.subjectIndex ?? attempt);
   const interests =
     input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
   const avoid = input.recentTitles?.length
@@ -132,9 +147,11 @@ function buildMessages(
     ? "Do NOT reuse the same insight, facts, or wording as any recent post — must be a genuinely different angle."
     : "";
 
+  const scopeRule = `SCOPE RULE: The reader selected "${focus}" as an interest AREA — a filter for what they want to learn about. Your post must be about a SPECIFIC subject INSIDE that area: "${subject}". Do NOT write about "${focus}" itself, what "${focus}" is, overviews of "${focus}", or the history of "${focus}" as a field. Teach the specific subject directly.`;
+
   const task =
     input.prompt?.trim() ||
-    `Write one original insight post focused on "${focus}". Surprise the reader with something specific they probably didn't know.`;
+    `Write one original insight post about: ${subject} (within the reader's "${focus}" interests). Surprise them with something specific they probably didn't know.`;
 
   const technicalHint =
     input.style === "Deep technical" ||
@@ -152,13 +169,16 @@ function buildMessages(
       role: "system" as const,
       content: `${persona.name} (${persona.role}) on InsightScroll as ${persona.handle}. ${persona.voice}
 Tone: ${STYLE_GUIDE[input.style]}. Teach something specific — no generic fluff.
-Title: premium clickbait about the real topic — make readers NEED to click.
-${technicalHint} Include 1-3 real links (Wikipedia for core subject). ${dupHint} ${retryHint}`.trim(),
+${scopeRule}
+Title: premium clickbait about the SPECIFIC SUBJECT — never a meta headline about the interest label.
+${technicalHint} Wiki links should be about concepts in the post, not the broad interest label. Include 1-3 real links. ${dupHint} ${retryHint}`.trim(),
     },
     {
       role: "user" as const,
-      content: `Interests: ${interests}
-Focus: ${focus}
+      content: `Interest areas: ${interests}
+Interest area tag for this post: ${focus}
+Specific subject to write about: ${subject}
+
 Avoid these titles (and do not rewrite the same post with different wording):
 ${avoid}
 
@@ -231,6 +251,8 @@ function parseGeneratedContent(
     topic,
     wiki_terms
   );
+
+  if (isMetaTopicPost(title, body, topic, wiki_terms)) return null;
 
   return {
     topic,
@@ -310,39 +332,37 @@ function buildFallbackPost(
   persona: Persona
 ): GeneratedPost {
   const focus = pickFocusTopic(input.topics, input.focusTopic);
-  const angles = [
-    "a counterintuitive study result",
-    "a historical parallel that changes how you see the present",
-    "a mechanism most people misunderstand",
-    "a recent discovery that overturns conventional wisdom",
-    "a practical framework used by experts in the field",
-  ];
-  const angle = angles[Math.floor(Math.random() * angles.length)];
+  const subject =
+    input.concreteSubject ??
+    pickConcreteSubject(focus, input.subjectIndex ?? Date.now());
   const stamp = Date.now().toString(36).slice(-4);
 
-  const hooks = [
-    `Your brain on ${focus} is not what you think`,
-    `The ${focus} trick experts quietly use`,
-    `Why ${focus} breaks every rule you learned`,
-    `${focus}: the part nobody talks about`,
-    `This ${focus} fact changes the whole game`,
-  ];
-  let title = hooks[Math.floor(Math.random() * hooks.length)];
+  let title = subject.endsWith("?")
+    ? subject
+    : `The weird truth about ${subject.toLowerCase()}`;
   let tries = 0;
   while (isTooSimilar(title, recentTitles) && tries < 8) {
-    title = `${focus} just got weird (${stamp}-${tries + 1})`;
+    title = `What most people miss about ${subject.toLowerCase()} (${stamp}-${tries + 1})`;
     tries++;
   }
 
-  const wikiTerm = focus.split(" ")[0] ?? focus;
+  const wikiTerm =
+    wiki_termsFromSubject(subject) ?? subject.split(" ").slice(-2).join(" ");
   const wiki_terms = [{ term: wikiTerm }];
 
   return {
     topic: focus,
     title,
-    body: `Researchers and practitioners in [[${wikiTerm}]] keep running into the same blind spot: we assume the obvious explanation is complete.\n\n${angle.charAt(0).toUpperCase() + angle.slice(1)} offers a sharper lens — and it changes what you'd predict next. Worth sitting with for a minute before you scroll on.`,
-    links: finalizePostLinks([], focus, wiki_terms),
+    body: `Most people overlook how [[${wikiTerm}]] actually behaves in practice.\n\nHere's the mechanism: ${subject.charAt(0).toUpperCase() + subject.slice(1)} — and once you see it, you can't unsee it. Worth a minute before you scroll on.`,
+    links: finalizePostLinks([], wikiTerm, wiki_terms),
     wiki_terms,
     persona,
   };
+}
+
+function wiki_termsFromSubject(subject: string): string | null {
+  const match = subject.match(
+    /\b(CPU|TCP|CRISPR|entropy|eigenvalues|gradient descent|hash tables|neutron stars|superconductors|p-values|short selling)\b/i
+  );
+  return match ? match[1] : null;
 }
