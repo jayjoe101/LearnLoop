@@ -10,6 +10,7 @@ export type FallbackPostInput = {
   concreteSubject?: string;
   subjectIndex?: number;
   recentTitles?: string[];
+  avoidSubjects?: string[];
 };
 
 export type FallbackPost = {
@@ -126,8 +127,9 @@ export async function buildVariedFallbackPost(
     input.concreteSubject ??
     (await discoverConcreteSubject({
       topic: focus,
-      subjectIndex: input.subjectIndex ?? variant,
+      subjectIndex: (input.subjectIndex ?? 0) + variant,
       recentTitles: input.recentTitles,
+      avoidSubjects: input.avoidSubjects,
     }));
   const wikiTerm = extractPrimaryWikiTerm(subject);
   const hook = extractHook(subject);

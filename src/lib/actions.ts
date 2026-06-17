@@ -11,17 +11,14 @@ import {
 import { generatePost, type GeneratedPost } from "@/lib/grok";
 import {
   fetchGenerationContext,
-  pickRotatingTopic,
+  pickRandomTopic,
 } from "@/lib/generation-context";
 import { personaToAuthorFields } from "@/lib/post-author";
 import { fetchValidatedPostImage } from "@/lib/image-relevance";
 import { attachPostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
-import {
-  discoverConcreteSubject,
-  prefetchSubjectsForTopic,
-} from "@/lib/subject-discovery";
+import { discoverConcreteSubject } from "@/lib/subject-discovery";
 import {
   type FeedStyle,
   type Post,
@@ -152,25 +149,36 @@ export async function completeOnboarding(
   if (profileError) return { error: profileError.message };
 
   let recentTitles: string[] = [];
+  let recentSubjects: string[] = [];
   let recentFingerprints: string[] = [];
+  let lastTopic: string | undefined;
 
   for (let i = 0; i < 2; i++) {
+    const focusTopic = pickRandomTopic(unique, lastTopic);
     const created = await createUniquePost(await createClient(), user.id, {
       topicNames: unique,
       style: feedStyle,
       recentTitles,
+      recentSubjects,
       recentFingerprints,
-      focusTopic: pickRotatingTopic(unique, i),
+      focusTopic,
+      lastTopic,
       postCount: i,
     });
 
     if (created) {
       recentTitles = [...recentTitles, created.title];
+      recentSubjects = [
+        ...recentSubjects,
+        ...(created.wiki_terms ?? []).map((w) => w.term),
+        created.title,
+      ];
       recentFingerprints = appendFingerprint(
         recentFingerprints,
         created.title,
         created.body
       );
+      lastTopic = created.topic;
     }
   }
 
@@ -269,32 +277,32 @@ async function createUniquePost(
     topicNames: string[];
     style: FeedStyle;
     recentTitles: string[];
+    recentSubjects?: string[];
     recentFingerprints: string[];
     focusTopic?: string;
+    lastTopic?: string;
     postCount: number;
     prompt?: string;
   }
 ): Promise<Post | null> {
   let titles = [...options.recentTitles];
+  const subjects = [...(options.recentSubjects ?? [])];
   let fingerprints = [...options.recentFingerprints];
 
   for (let attempt = 0; attempt < MAX_DEDUP_RETRIES; attempt++) {
     const focusTopic =
       options.focusTopic ??
-      pickRotatingTopic(options.topicNames, options.postCount + attempt);
-    const subjectIndex = options.postCount + attempt;
+      pickRandomTopic(options.topicNames, options.lastTopic);
+    const subjectIndex = Date.now() + options.postCount + attempt * 17;
 
     const concreteSubject = focusTopic
       ? await discoverConcreteSubject({
           topic: focusTopic,
           subjectIndex,
           recentTitles: titles,
+          avoidSubjects: subjects,
         })
       : undefined;
-
-    if (focusTopic) {
-      prefetchSubjectsForTopic(focusTopic, titles);
-    }
 
     const post = await generatePost(
       {
@@ -303,6 +311,7 @@ async function createUniquePost(
         style: options.style,
         recentTitles: titles,
         recentFingerprints: fingerprints,
+        avoidSubjects: subjects,
         focusTopic,
         concreteSubject,
         subjectIndex,
@@ -384,8 +393,10 @@ export async function generateNewPost(prompt?: string) {
     topicNames: ctx.topicNames,
     style,
     recentTitles: ctx.recentTitles,
+    recentSubjects: ctx.recentSubjects,
     recentFingerprints: ctx.recentFingerprints,
-    focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount),
+    focusTopic: pickRandomTopic(ctx.topicNames, ctx.lastTopic),
+    lastTopic: ctx.lastTopic,
     postCount: ctx.postCount,
     prompt,
   });
@@ -420,6 +431,10 @@ export async function generateLivePost(session?: LiveSessionContext) {
     ...ctx.recentTitles,
     ...(session?.recentTitles ?? []),
   ].slice(-14);
+  const recentSubjects = [
+    ...ctx.recentSubjects,
+    ...(session?.recentSubjects ?? []),
+  ].slice(-20);
   const recentFingerprints = [
     ...ctx.recentFingerprints,
     ...(session?.recentFingerprints ?? []),
@@ -431,8 +446,10 @@ export async function generateLivePost(session?: LiveSessionContext) {
     topicNames: ctx.topicNames,
     style,
     recentTitles,
+    recentSubjects,
     recentFingerprints,
-    focusTopic: pickRotatingTopic(ctx.topicNames, postCount),
+    focusTopic: pickRandomTopic(ctx.topicNames, ctx.lastTopic),
+    lastTopic: ctx.lastTopic,
     postCount,
   });
 
@@ -459,25 +476,36 @@ export async function loadMorePosts(count = 2) {
     (profile.feed_style as FeedStyle) ?? "Balanced & insightful";
 
   let recentTitles = ctx.recentTitles;
+  let recentSubjects = ctx.recentSubjects;
   let recentFingerprints = ctx.recentFingerprints;
+  let lastTopic = ctx.lastTopic;
 
   for (let i = 0; i < count; i++) {
+    const focusTopic = pickRandomTopic(ctx.topicNames, lastTopic);
     const created = await createUniquePost(supabase, user.id, {
       topicNames: ctx.topicNames,
       style,
       recentTitles,
+      recentSubjects,
       recentFingerprints,
-      focusTopic: pickRotatingTopic(ctx.topicNames, ctx.postCount + i),
+      focusTopic,
+      lastTopic,
       postCount: ctx.postCount + i,
     });
 
     if (created) {
       recentTitles = [...recentTitles, created.title];
+      recentSubjects = [
+        ...recentSubjects,
+        ...(created.wiki_terms ?? []).map((w) => w.term),
+        created.title,
+      ];
       recentFingerprints = appendFingerprint(
         recentFingerprints,
         created.title,
         created.body
       );
+      lastTopic = created.topic;
     }
   }
 

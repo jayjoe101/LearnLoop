@@ -80,6 +80,7 @@ export type GeneratePostInput = {
   style: FeedStyle;
   recentTitles?: string[];
   recentFingerprints?: string[];
+  avoidSubjects?: string[];
   focusTopic?: string;
   concreteSubject?: string;
   subjectIndex?: number;
@@ -113,7 +114,10 @@ function buildMessages(
   const interests =
     input.topics.length > 0 ? input.topics.join(", ") : "broad curiosity";
   const avoid = input.recentTitles?.length
-    ? input.recentTitles.slice(0, 6).map((t) => `- ${t}`).join("\n")
+    ? input.recentTitles.slice(0, 8).map((t) => `- ${t}`).join("\n")
+    : "None yet.";
+  const avoidSubjects = input.avoidSubjects?.length
+    ? input.avoidSubjects.slice(0, 10).map((s) => `- ${s}`).join("\n")
     : "None yet.";
   const dupHint = input.recentFingerprints?.length
     ? "Do NOT reuse the same insight, facts, or wording as any recent post."
@@ -158,6 +162,9 @@ Specific subject (required): ${subject}
 
 Avoid these titles:
 ${avoid}
+
+Avoid these subjects (pick a different angle):
+${avoidSubjects}
 
 ${task}`,
     },
@@ -285,9 +292,10 @@ export async function generatePost(
     input.concreteSubject?.trim() ||
     (await discoverConcreteSubject({
       topic: focus,
-      subjectIndex: input.subjectIndex ?? attempt,
+      subjectIndex: input.subjectIndex ?? Date.now() + attempt,
       recentTitles,
       usedSubjects: input.usedSubjects,
+      avoidSubjects: input.avoidSubjects,
     }));
 
   const baseInput: GeneratePostInput = {
@@ -332,13 +340,25 @@ export async function generatePost(
   }
 
   for (let fb = 0; fb < 4; fb++) {
+    const fallbackSubject = await discoverConcreteSubject({
+      topic: focus,
+      subjectIndex: (input.subjectIndex ?? 0) + variant + fb + 1,
+      recentTitles,
+      avoidSubjects: [
+        ...(input.avoidSubjects ?? []),
+        ...(input.usedSubjects ?? []),
+        subject,
+      ],
+    });
+
     const fallback = await buildVariedFallbackPost(
       {
         topics: input.topics,
         focusTopic: focus,
-        concreteSubject: subject,
+        concreteSubject: fallbackSubject,
         subjectIndex: input.subjectIndex,
         recentTitles,
+        avoidSubjects: input.avoidSubjects,
       },
       pickRandomPersona(),
       variant + fb

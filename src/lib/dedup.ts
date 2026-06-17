@@ -65,6 +65,17 @@ const BOILERPLATE_MARKERS = [
   "here's the mechanism:",
   "worth a minute before you scroll on",
   "the weird truth about how",
+  "one of those ideas that sounds simple",
+  "textbooks rush past",
+  "shows up in more places than you'd expect",
+  "stop right before it gets good",
+  "feels fuzzy, you're not alone",
+  "reputation problem: people treat it like trivia",
+  "wilder than it sounds",
+  "the part everyone hand-waves",
+  "actually works like this",
+  "explained without the fluff",
+  "nobody tells you this about",
 ];
 
 /** Detect templated fallback posts that only swap the subject name. */

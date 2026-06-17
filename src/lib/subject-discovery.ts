@@ -1,149 +1,180 @@
 import { chatCompletion, FAST_MODEL, parseJsonContent } from "@/lib/xai-client";
 
-const CACHE_TTL_MS = 12 * 60 * 1000;
-const SUBJECTS_PER_FETCH = 8;
+const DISCOVERY_ATTEMPTS = 3;
 
-type TopicCache = {
-  subjects: string[];
-  fetchedAt: number;
-};
+const ANGLE_HINTS = [
+  "a counterintuitive mechanism most people misunderstand",
+  "a specific historical episode or person",
+  "a named paradox, puzzle, or edge case",
+  "a concrete technique or tool practitioners actually use",
+  "a surprising connection between two ideas in the field",
+  "a failure mode or limitation experts know about",
+  "a measurement, experiment, or result that changed assumptions",
+  "an underappreciated application in the real world",
+];
 
-const topicCache = new Map<string, TopicCache>();
-
-function cacheKey(topic: string): string {
-  return topic.toLowerCase().replace(/\s+/g, " ").trim();
+function normalizeSubject(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function genericFallback(topic: string, index: number): string {
-  const hooks = [
-    `a specific mechanism inside ${topic} that most explanations skip`,
-    `one counterintuitive discovery from ${topic} with a named example`,
-    `how a real system in ${topic} works step by step`,
-    `a historical breakthrough that changed ${topic}`,
-  ];
-  return hooks[Math.abs(index) % hooks.length];
-}
+function isSubjectTooSimilar(subject: string, avoid: Set<string>): boolean {
+  const key = normalizeSubject(subject);
+  if (!key || key.length < 8) return true;
 
-function pickUnusedSubject(
-  subjects: string[],
-  avoid: Set<string>,
-  index: number
-): string | null {
-  for (let i = 0; i < subjects.length; i++) {
-    const candidate = subjects[(index + i) % subjects.length];
-    const key = candidate.toLowerCase();
-    if (!avoid.has(key)) return candidate;
+  for (const existing of avoid) {
+    if (key === existing) return true;
+    if (key.includes(existing) || existing.includes(key)) return true;
+
+    const a = new Set(key.split(" ").filter((w) => w.length > 3));
+    const b = new Set(existing.split(" ").filter((w) => w.length > 3));
+    let overlap = 0;
+    for (const w of a) {
+      if (b.has(w)) overlap++;
+    }
+    if (overlap >= 3) return true;
   }
-  return null;
+
+  return false;
 }
 
-async function fetchSubjectsForTopic(
+function buildAvoidList(items: string[], emptyLabel: string): string {
+  if (items.length === 0) return emptyLabel;
+  return items
+    .slice(0, 14)
+    .map((item) => `- ${item}`)
+    .join("\n");
+}
+
+function pickAngleHint(seed: number): string {
+  return ANGLE_HINTS[Math.abs(seed) % ANGLE_HINTS.length];
+}
+
+async function discoverSingleSubject(
   topic: string,
-  avoidTitles: string[]
-): Promise<string[]> {
-  const avoidList =
-    avoidTitles.length > 0
-      ? avoidTitles.slice(0, 8).map((t) => `- ${t}`).join("\n")
-      : "None yet.";
+  options: {
+    recentTitles: string[];
+    avoidSubjects: string[];
+    seed: number;
+    attempt: number;
+  }
+): Promise<string | null> {
+  const avoid = new Set<string>();
+  for (const item of [...options.recentTitles, ...options.avoidSubjects]) {
+    const key = normalizeSubject(item);
+    if (key) avoid.add(key);
+  }
+
+  const avoidTitles = buildAvoidList(options.recentTitles, "None yet.");
+  const avoidSubjects = buildAvoidList(options.avoidSubjects, "None yet.");
+  const angle = pickAngleHint(options.seed + options.attempt * 7);
 
   const content = await chatCompletion({
     model: FAST_MODEL,
-    temperature: 0.85,
-    maxTokens: 400,
-    timeoutMs: 8_000,
+    temperature: 0.92 + options.attempt * 0.04,
+    maxTokens: 180,
+    timeoutMs: 9_000,
     jsonSchema: {
-      name: "topic_subjects",
+      name: "post_subject",
       schema: {
         type: "object",
         properties: {
-          subjects: {
-            type: "array",
-            items: { type: "string" },
-            minItems: 5,
-            maxItems: 8,
+          subject: {
+            type: "string",
+            description:
+              "One specific teachable subject inside the interest area — not the area label itself.",
           },
         },
-        required: ["subjects"],
+        required: ["subject"],
         additionalProperties: false,
       },
     },
     messages: [
       {
         role: "system",
-        content:
-          "You suggest specific, fascinating post subjects inside a user's interest area. Never suggest broad overviews of the topic label itself.",
+        content: `You pick ONE post subject for a learning feed.
+
+The user provides an interest AREA — a meta label (like "Physics" or "Cooking") that describes what shelf of knowledge they care about.
+The post subject must be a SPECIFIC thing inside that area — never the area label, never an overview of the field.
+
+Good subjects: named mechanisms, discoveries, people, experiments, paradoxes, techniques, artifacts, episodes.
+Bad subjects: "introduction to X", "basics of X", "what is X", "overview of X", or repeating the area name.`,
       },
       {
         role: "user",
-        content: `Interest area: "${topic}"
+        content: `Interest AREA (meta label — do NOT write about this directly): "${topic}"
 
-What are ${SUBJECTS_PER_FETCH} interesting, specific subjects WITHIN this area?
-Each subject must be concrete (a mechanism, discovery, person, paradox, or story) — not "introduction to ${topic}".
+Pick ONE fresh, specific post subject inside this area.
+Angle to explore: ${angle}
+Surprise the reader — prefer lesser-known specifics over clichés.
 
-Avoid overlapping these recent post titles:
-${avoidList}
+Do NOT overlap these recent post titles:
+${avoidTitles}
 
-Return JSON: { "subjects": ["...", ...] }`,
+Do NOT overlap these recent subjects or concepts:
+${avoidSubjects}
+
+Return JSON: { "subject": "..." }`,
       },
     ],
   });
 
-  if (!content) return [];
+  if (!content) return null;
 
-  const parsed = parseJsonContent<{ subjects?: string[] }>(content);
-  return (parsed?.subjects ?? [])
-    .map((s) => s.trim())
-    .filter((s) => s.length > 12 && s.length < 200);
+  const parsed = parseJsonContent<{ subject?: string }>(content);
+  const subject = parsed?.subject?.trim() ?? "";
+  if (subject.length < 12 || subject.length > 220) return null;
+  if (isSubjectTooSimilar(subject, avoid)) return null;
+
+  const lower = subject.toLowerCase();
+  const topicLower = topic.toLowerCase();
+  if (
+    lower === topicLower ||
+    lower.startsWith(`introduction to ${topicLower}`) ||
+    lower.startsWith(`overview of ${topicLower}`) ||
+    lower.startsWith(`basics of ${topicLower}`) ||
+    lower.startsWith(`what is ${topicLower}`)
+  ) {
+    return null;
+  }
+
+  return subject;
 }
 
+/**
+ * AI-picked concrete post subject — fresh every call, no hardcoded pools or cache.
+ */
 export async function discoverConcreteSubject(options: {
   topic: string;
   subjectIndex?: number;
   recentTitles?: string[];
   usedSubjects?: string[];
+  avoidSubjects?: string[];
 }): Promise<string> {
   const topic = options.topic.trim() || "general knowledge";
-  const key = cacheKey(topic);
-  const index = options.subjectIndex ?? 0;
-  const avoid = new Set<string>();
+  const seed = options.subjectIndex ?? Date.now();
+  const recentTitles = options.recentTitles ?? [];
+  const avoidSubjects = [
+    ...(options.avoidSubjects ?? []),
+    ...(options.usedSubjects ?? []),
+  ];
 
-  for (const title of options.recentTitles ?? []) {
-    avoid.add(title.toLowerCase());
-  }
-  for (const subject of options.usedSubjects ?? []) {
-    avoid.add(subject.toLowerCase());
-  }
-
-  const cached = topicCache.get(key);
-  const fresh =
-    cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS
-      ? cached.subjects
-      : null;
-
-  if (fresh?.length) {
-    const picked = pickUnusedSubject(fresh, avoid, index);
-    if (picked) return picked;
+  for (let attempt = 0; attempt < DISCOVERY_ATTEMPTS; attempt++) {
+    const subject = await discoverSingleSubject(topic, {
+      recentTitles,
+      avoidSubjects,
+      seed,
+      attempt,
+    });
+    if (subject) return subject;
   }
 
-  const fetched = await fetchSubjectsForTopic(topic, options.recentTitles ?? []);
-  if (fetched.length > 0) {
-    topicCache.set(key, { subjects: fetched, fetchedAt: Date.now() });
-    const picked = pickUnusedSubject(fetched, avoid, index);
-    if (picked) return picked;
-  }
-
-  return genericFallback(topic, index);
-}
-
-/** Pre-warm subject cache for the next post (fire-and-forget). */
-export function prefetchSubjectsForTopic(topic: string, recentTitles: string[] = []) {
-  const key = cacheKey(topic);
-  const cached = topicCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return;
-
-  void fetchSubjectsForTopic(topic, recentTitles).then((subjects) => {
-    if (subjects.length > 0) {
-      topicCache.set(key, { subjects, fetchedAt: Date.now() });
-    }
+  const lastChance = await discoverSingleSubject(topic, {
+    recentTitles,
+    avoidSubjects: [...avoidSubjects, ...recentTitles],
+    seed: seed + 99,
+    attempt: DISCOVERY_ATTEMPTS,
   });
+  if (lastChance) return lastChance;
+
+  return `a specific, lesser-known example within ${topic}`;
 }

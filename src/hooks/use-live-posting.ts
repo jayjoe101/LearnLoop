@@ -18,6 +18,7 @@ export function useLivePosting(initialPosts: Post[]) {
   const liveOnRef = useRef(liveOn);
   const sessionRef = useRef<LiveSessionContext>({
     recentTitles: [],
+    recentSubjects: [],
     recentFingerprints: [],
     postCountOffset: 0,
   });
@@ -59,6 +60,11 @@ export function useLivePosting(initialPosts: Post[]) {
           recentTitles: [...sessionRef.current.recentTitles, post.title].slice(
             -12
           ),
+          recentSubjects: [
+            ...sessionRef.current.recentSubjects,
+            ...(post.wiki_terms ?? []).map((w) => w.term),
+            post.title,
+          ].slice(-16),
           recentFingerprints: appendFingerprint(
             sessionRef.current.recentFingerprints,
             post.title,

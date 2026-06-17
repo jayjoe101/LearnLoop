@@ -49,17 +49,6 @@ export type Profile = {
   onboarding_completed: boolean;
 };
 
-export const ONBOARDING_TOPICS = [
-  "Computer Science",
-  "Computer Programming",
-  "Mathematics",
-  "Statistics",
-  "Machine Learning",
-  "AI",
-  "Science",
-  "Physics",
-] as const;
-
 export type PostInteraction = {
   liked: boolean;
   saved: boolean;

@@ -19,6 +19,7 @@ export function randomPendingPostLimit(): number {
 
 export type LiveSessionContext = {
   recentTitles: string[];
+  recentSubjects: string[];
   recentFingerprints: string[];
   postCountOffset: number;
 };

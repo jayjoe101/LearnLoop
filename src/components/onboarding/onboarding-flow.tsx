@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { completeOnboarding } from "@/lib/actions";
-import { ONBOARDING_TOPICS } from "@/lib/types";
 
 type Step = "welcome" | "interests" | "building";
 
 const MIN_TOPICS = 3;
+const MAX_TOPICS = 8;
 const DEFAULT_FEED_STYLE = "Balanced & insightful" as const;
 
 export function OnboardingFlow() {
@@ -19,22 +19,16 @@ export function OnboardingFlow() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function toggleTopic(topic: string) {
-    setSelectedTopics((prev) =>
-      prev.includes(topic)
-        ? prev.filter((t) => t !== topic)
-        : prev.length < 8
-          ? [...prev, topic]
-          : prev
-    );
-  }
-
   function addCustomTopic() {
     const trimmed = customTopic.trim();
     if (!trimmed || selectedTopics.includes(trimmed)) return;
-    if (selectedTopics.length >= 8) return;
+    if (selectedTopics.length >= MAX_TOPICS) return;
     setSelectedTopics((prev) => [...prev, trimmed]);
     setCustomTopic("");
+  }
+
+  function removeTopic(topic: string) {
+    setSelectedTopics((prev) => prev.filter((t) => t !== topic));
   }
 
   function goNext() {
@@ -96,8 +90,8 @@ export function OnboardingFlow() {
               LearnLoop
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-relaxed text-[var(--color-coffee-mocha)]">
-              A feed tuned to what you care about. Pick your interests and start
-              scrolling with purpose.
+              A feed tuned to what you care about. Name your own interests — no
+              preset lists — and start scrolling with purpose.
             </p>
             <p className="mt-6 text-center text-xs text-[var(--color-coffee-taupe)]">
               Your profile saves automatically in this browser.
@@ -118,38 +112,40 @@ export function OnboardingFlow() {
               What interests you?
             </h2>
             <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">
-              Choose at least {MIN_TOPICS}. This becomes your interest profile.
+              Add at least {MIN_TOPICS} interest areas — broad labels like
+              &quot;Urban planning&quot; or &quot;Jazz history&quot;. Posts will
+              pick specific subjects inside each area.
             </p>
 
-            <div className="onboarding-chip-grid mt-6">
-              {ONBOARDING_TOPICS.map((topic, i) => {
-                const active = selectedTopics.includes(topic);
-                return (
+            {selectedTopics.length > 0 && (
+              <div className="onboarding-chip-grid mt-6">
+                {selectedTopics.map((topic, i) => (
                   <button
                     key={topic}
                     type="button"
-                    onClick={() => toggleTopic(topic)}
-                    className={`onboarding-chip ${active ? "onboarding-chip-active" : ""}`}
+                    onClick={() => removeTopic(topic)}
+                    className="onboarding-chip onboarding-chip-active"
                     style={{ animationDelay: `${i * 35}ms` }}
+                    aria-label={`Remove ${topic}`}
                   >
                     {topic}
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
 
-            <div className="mt-4 flex gap-2">
+            <div className={`flex gap-2 ${selectedTopics.length > 0 ? "mt-4" : "mt-6"}`}>
               <input
                 value={customTopic}
                 onChange={(e) => setCustomTopic(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addCustomTopic()}
-                placeholder="Add your own"
+                placeholder="e.g. Neuroscience, Rust, Ancient Rome…"
                 className="onboarding-input flex-1"
               />
               <button
                 type="button"
                 onClick={addCustomTopic}
-                disabled={!customTopic.trim()}
+                disabled={!customTopic.trim() || selectedTopics.length >= MAX_TOPICS}
                 className="onboarding-btn-secondary shrink-0 px-4"
               >
                 Add
@@ -157,7 +153,7 @@ export function OnboardingFlow() {
             </div>
 
             <p className="mt-4 text-xs text-[var(--color-coffee-taupe)]">
-              {selectedTopics.length} selected
+              {selectedTopics.length} added
               {selectedTopics.length < MIN_TOPICS &&
                 ` · ${MIN_TOPICS - selectedTopics.length} more needed`}
             </p>
@@ -184,7 +180,7 @@ export function OnboardingFlow() {
               Building your feed
             </h2>
             <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">
-              Personalizing insights from your interests…
+              Discovering specific subjects from your interests…
             </p>
             <div className="mx-auto mt-8 h-1 max-w-xs overflow-hidden rounded-full bg-[var(--color-coffee-elevated)]">
               <div
