@@ -3,12 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { completeOnboarding } from "@/lib/actions";
+import { ONBOARDING_TOPICS } from "@/lib/types";
 
 type Step = "welcome" | "interests" | "building";
 
 const MIN_TOPICS = 3;
 const MAX_TOPICS = 8;
 const DEFAULT_FEED_STYLE = "Balanced & insightful" as const;
+
+const PRESET_SET = new Set<string>(ONBOARDING_TOPICS);
 
 export function OnboardingFlow() {
   const router = useRouter();
@@ -19,16 +22,24 @@ export function OnboardingFlow() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const customOnlyTopics = selectedTopics.filter((t) => !PRESET_SET.has(t));
+
+  function toggleTopic(topic: string) {
+    setSelectedTopics((prev) =>
+      prev.includes(topic)
+        ? prev.filter((t) => t !== topic)
+        : prev.length < MAX_TOPICS
+          ? [...prev, topic]
+          : prev
+    );
+  }
+
   function addCustomTopic() {
     const trimmed = customTopic.trim();
     if (!trimmed || selectedTopics.includes(trimmed)) return;
     if (selectedTopics.length >= MAX_TOPICS) return;
     setSelectedTopics((prev) => [...prev, trimmed]);
     setCustomTopic("");
-  }
-
-  function removeTopic(topic: string) {
-    setSelectedTopics((prev) => prev.filter((t) => t !== topic));
   }
 
   function goNext() {
@@ -90,8 +101,8 @@ export function OnboardingFlow() {
               LearnLoop
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-relaxed text-[var(--color-coffee-mocha)]">
-              A feed tuned to what you care about. Name your own interests — no
-              preset lists — and start scrolling with purpose.
+              A feed tuned to what you care about. Pick your interests and start
+              scrolling with purpose.
             </p>
             <p className="mt-6 text-center text-xs text-[var(--color-coffee-taupe)]">
               Your profile saves automatically in this browser.
@@ -112,18 +123,34 @@ export function OnboardingFlow() {
               What interests you?
             </h2>
             <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">
-              Add at least {MIN_TOPICS} interest areas — broad labels like
-              &quot;Urban planning&quot; or &quot;Jazz history&quot;. Posts will
-              pick specific subjects inside each area.
+              Choose at least {MIN_TOPICS}. These are broad interest areas — each
+              post will pick a specific subject inside one of them.
             </p>
 
-            {selectedTopics.length > 0 && (
-              <div className="onboarding-chip-grid mt-6">
-                {selectedTopics.map((topic, i) => (
+            <div className="onboarding-chip-grid mt-6">
+              {ONBOARDING_TOPICS.map((topic, i) => {
+                const active = selectedTopics.includes(topic);
+                return (
                   <button
                     key={topic}
                     type="button"
-                    onClick={() => removeTopic(topic)}
+                    onClick={() => toggleTopic(topic)}
+                    className={`onboarding-chip ${active ? "onboarding-chip-active" : ""}`}
+                    style={{ animationDelay: `${i * 35}ms` }}
+                  >
+                    {topic}
+                  </button>
+                );
+              })}
+            </div>
+
+            {customOnlyTopics.length > 0 && (
+              <div className="onboarding-chip-grid mt-3">
+                {customOnlyTopics.map((topic, i) => (
+                  <button
+                    key={topic}
+                    type="button"
+                    onClick={() => toggleTopic(topic)}
                     className="onboarding-chip onboarding-chip-active"
                     style={{ animationDelay: `${i * 35}ms` }}
                     aria-label={`Remove ${topic}`}
@@ -134,12 +161,12 @@ export function OnboardingFlow() {
               </div>
             )}
 
-            <div className={`flex gap-2 ${selectedTopics.length > 0 ? "mt-4" : "mt-6"}`}>
+            <div className="mt-4 flex gap-2">
               <input
                 value={customTopic}
                 onChange={(e) => setCustomTopic(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addCustomTopic()}
-                placeholder="e.g. Neuroscience, Rust, Ancient Rome…"
+                placeholder="Add your own"
                 className="onboarding-input flex-1"
               />
               <button
@@ -153,7 +180,7 @@ export function OnboardingFlow() {
             </div>
 
             <p className="mt-4 text-xs text-[var(--color-coffee-taupe)]">
-              {selectedTopics.length} added
+              {selectedTopics.length} selected
               {selectedTopics.length < MIN_TOPICS &&
                 ` · ${MIN_TOPICS - selectedTopics.length} more needed`}
             </p>

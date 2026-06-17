@@ -49,6 +49,18 @@ export type Profile = {
   onboarding_completed: boolean;
 };
 
+/** Quick-pick interest areas for onboarding — same as typing them manually. */
+export const ONBOARDING_TOPICS = [
+  "Computer Science",
+  "Computer Programming",
+  "Mathematics",
+  "Statistics",
+  "Machine Learning",
+  "AI",
+  "Science",
+  "Physics",
+] as const;
+
 export type PostInteraction = {
   liked: boolean;
   saved: boolean;
