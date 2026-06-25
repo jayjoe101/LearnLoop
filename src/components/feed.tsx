@@ -5,6 +5,7 @@ import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
 import { useLivePosting } from "@/hooks/use-live-posting";
 import { PostCard } from "@/components/post-card";
 import { PlusIcon } from "@/components/icons";
+import { NightNowButton } from "@/components/night-now-button";
 import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
 
 type Props = {
@@ -97,6 +98,7 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
               Live posting
             </button>
           )}
+          <NightNowButton />
         </div>
 
         <div

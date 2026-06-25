@@ -20,6 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geist.variable} min-h-screen font-sans`}>
+        {/* early script for no-FOUC theme restore, default light mocha */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => { try { const s = localStorage.getItem('theme'); const r = document.documentElement; if (s === 'dark') r.classList.add('dark'); else r.classList.remove('dark'); } catch(e){} })();`,
+          }}
+        />
         {children}
       </body>
     </html>
