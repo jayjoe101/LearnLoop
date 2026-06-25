@@ -82,9 +82,7 @@ export function Feed({ posts, topics, interactions, feedStyle }: Props) {
               type="button"
               onClick={toggleLive}
               className={`btn-tactile btn-tactile-pill flex shrink-0 items-center gap-2 px-3 py-1.5 text-xs font-medium ${
-                liveOn
-                  ? "border-[rgba(109,138,90,0.35)] bg-[rgba(109,138,90,0.12)] text-[var(--color-coffee-sage)]"
-                  : "btn-tactile-ghost"
+                liveOn ? "live-toggle-active" : "btn-tactile-ghost"
               }`}
             >
               <span

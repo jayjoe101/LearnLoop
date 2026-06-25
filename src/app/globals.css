@@ -307,29 +307,53 @@ button:disabled {
 }
 
 .dark .btn-tactile-primary {
+  border: 1px solid rgba(245, 233, 217, 0.2);
   background: linear-gradient(180deg, #2a2520 0%, #211d18 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.08) inset,
+    0 2px 0 rgba(166, 107, 58, 0.12),
+    0 4px 14px rgba(42, 33, 24, 0.18);
   color: var(--color-coffee-text);
-  border-color: rgba(245, 233, 217, 0.2);
 }
 .dark .btn-tactile-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
   background: linear-gradient(180deg, #3a342e 0%, #2a2520 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.1) inset,
+    0 3px 0 rgba(166, 107, 58, 0.1),
+    0 6px 18px rgba(42, 33, 24, 0.16);
+}
+.dark .btn-tactile-primary:active:not(:disabled) {
+  box-shadow:
+    0 2px 6px rgba(42, 33, 24, 0.22) inset,
+    0 1px 3px rgba(42, 33, 24, 0.12);
 }
 
 .dark .btn-tactile-secondary {
+  border: 1px solid rgba(245, 233, 217, 0.15);
   background: linear-gradient(180deg, #211d18 0%, #1a1712 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.08) inset,
+    0 2px 8px rgba(42, 33, 24, 0.1);
   color: var(--color-coffee-text-soft);
-  border-color: rgba(245, 233, 217, 0.15);
 }
 .dark .btn-tactile-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(245, 233, 217, 0.22);
   color: var(--color-coffee-text);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.1) inset,
+    0 4px 12px rgba(42, 33, 24, 0.14);
 }
 
 .dark .btn-tactile-ghost {
+  border: 1px solid rgba(245, 233, 217, 0.12);
   background: #211d18;
+  box-shadow: 0 1px 3px rgba(42, 33, 24, 0.1);
   color: var(--color-coffee-latte);
-  border-color: rgba(245, 233, 217, 0.12);
 }
 .dark .btn-tactile-ghost:hover:not(:disabled) {
+  border-color: rgba(245, 233, 217, 0.2);
   background: #2a2520;
   color: var(--color-coffee-text-soft);
 }
@@ -380,6 +404,23 @@ button:disabled {
 }
 
 .icon-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dark .icon-btn {
+  border: 1px solid rgba(245, 233, 217, 0.1);
+  background: linear-gradient(180deg, #2a2520 0%, #211d18 100%);
+  box-shadow: 0 1px 3px rgba(245, 233, 217, 0.08);
+  color: var(--color-coffee-mocha);
+}
+
+.dark .icon-btn:hover:not(:disabled) {
+  border-color: rgba(245, 233, 217, 0.18);
+  color: var(--color-coffee-text);
+  box-shadow: 0 3px 8px rgba(245, 233, 217, 0.1);
+}
+
+.dark .icon-btn:active:not(:disabled) {
   transform: translateY(1px);
 }
 
@@ -460,6 +501,11 @@ button:disabled {
   color: var(--color-coffee-text-soft);
   background: #fffdf9;
 }
+.dark .chip-tactile.btn-tactile:hover:not(:disabled) {
+  border-color: rgba(201, 149, 108, 0.28);
+  color: var(--color-coffee-text-soft);
+  background: #2a2520;
+}
 
 .surface-panel {
   border: 1px solid var(--color-border);
@@ -493,6 +539,12 @@ button:disabled {
   box-shadow: 0 8px 24px rgba(42, 33, 24, 0.08);
 }
 
+.dark .post-image-frame {
+  border: 1px solid rgba(245, 233, 217, 0.1);
+  background: var(--color-coffee-elevated);
+  box-shadow: 0 8px 24px rgba(245, 233, 217, 0.08);
+}
+
 .post-image-placeholder {
   position: relative;
   margin-bottom: 0;
@@ -507,6 +559,16 @@ button:disabled {
     #efe6da 100%
   );
   animation: post-image-pulse 2.4s ease-in-out infinite;
+}
+
+.dark .post-image-placeholder {
+  border: 1px dashed rgba(245, 233, 217, 0.14);
+  background: linear-gradient(
+    135deg,
+    #2a2520 0%,
+    #211d18 50%,
+    #1a1712 100%
+  );
 }
 
 .post-image-placeholder-label {
@@ -675,6 +737,18 @@ button:disabled {
   box-shadow: 0 4px 10px rgba(42, 33, 24, 0.08);
 }
 
+.dark .post-source-link {
+  border: 1px solid rgba(245, 233, 217, 0.1);
+  background: linear-gradient(180deg, #2a2520 0%, #211d18 100%);
+  box-shadow: 0 2px 6px rgba(245, 233, 217, 0.06);
+}
+
+.dark .post-source-link:hover {
+  border-color: rgba(245, 233, 217, 0.18);
+  background: #2a2520;
+  box-shadow: 0 4px 10px rgba(245, 233, 217, 0.08);
+}
+
 .post-source-link-label {
   font-size: 0.8rem;
   color: var(--color-coffee-text-soft);
@@ -720,6 +794,26 @@ button:disabled {
   border-color: rgba(201, 149, 108, 0.45);
   color: var(--color-coffee-caramel);
   background: rgba(201, 149, 108, 0.12);
+}
+
+.dark .post-action-btn {
+  border: 1px solid rgba(245, 233, 217, 0.1);
+  background: linear-gradient(180deg, #2a2520 0%, #211d18 100%);
+  box-shadow: 0 1px 3px rgba(245, 233, 217, 0.06);
+  color: var(--color-coffee-mocha);
+}
+
+.dark .post-action-btn:hover:not(:disabled) {
+  border-color: rgba(245, 233, 217, 0.18);
+  color: var(--color-coffee-text);
+  background: #2a2520;
+  box-shadow: 0 3px 8px rgba(245, 233, 217, 0.08);
+}
+
+.dark .post-action-btn-active {
+  border-color: rgba(201, 149, 108, 0.35);
+  color: var(--color-coffee-honey);
+  background: rgba(201, 149, 108, 0.08);
 }
 
 /* Onboarding */
@@ -896,4 +990,106 @@ button:disabled {
 .dark .onboarding-btn-secondary {
   background: #211d18;
   color: var(--color-coffee-latte);
+}
+
+/* =========================================
+   Additional .dark mirrors for structure parity
+   (exact same decls, only darker coffee palette values)
+   ========================================= */
+
+/* Live toggle active (covers the former hardcoded rgba in feed) */
+.live-toggle-active {
+  border-color: rgba(109, 138, 90, 0.35);
+  background: rgba(109, 138, 90, 0.12);
+  color: var(--color-coffee-sage);
+}
+.dark .live-toggle-active {
+  border-color: rgba(143, 166, 122, 0.35);
+  background: rgba(143, 166, 122, 0.1);
+  color: var(--color-coffee-sage);
+}
+
+/* Accent load button - dark mirror only (light rule already above) */
+.dark .btn-tactile-accent {
+  border: 1px solid rgba(201, 149, 108, 0.3);
+  background: linear-gradient(180deg, #8f6642 0%, #6f5235 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.12) inset,
+    0 3px 12px rgba(201, 149, 108, 0.18);
+  color: var(--color-coffee-text);
+}
+.dark .btn-tactile-accent:hover:not(:disabled) {
+  background: linear-gradient(180deg, #a57a52 0%, #8f6642 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.18) inset,
+    0 5px 16px rgba(201, 149, 108, 0.22);
+}
+
+/* Tab group container - dark mirror */
+.dark .tab-tactile-group {
+  border-color: rgba(245, 233, 217, 0.1);
+  background: var(--color-coffee-elevated);
+  box-shadow: 0 1px 4px rgba(245, 233, 217, 0.06) inset;
+}
+
+/* Tab active full mirror (bg + shadow + color) for .dark */
+.dark .tab-tactile-active {
+  background: linear-gradient(180deg, #2a2520 0%, #211d18 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.1) inset,
+    0 2px 6px rgba(42, 33, 24, 0.12);
+  color: var(--color-coffee-text);
+}
+
+/* Onboarding dark mirrors for full coverage */
+.dark .onboarding-orb {
+  background: conic-gradient(
+    from 180deg,
+    #5c5344 0deg,
+    #2a2520 120deg,
+    #3a342e 240deg,
+    #8f6642 360deg
+  );
+}
+
+.dark .onboarding-card {
+  border: 1px solid rgba(245, 233, 217, 0.1);
+  background: linear-gradient(180deg, #2a2520 0%, #211d18 100%);
+  box-shadow: 0 12px 32px rgba(42, 33, 24, 0.2);
+}
+
+.dark .onboarding-chip {
+  border: 1px solid rgba(245, 233, 217, 0.1);
+  background: #211d18;
+  box-shadow: 0 1px 3px rgba(245, 233, 217, 0.06);
+  color: var(--color-coffee-latte);
+}
+.dark .onboarding-chip:hover {
+  background: #2a2520;
+  color: var(--color-coffee-text-soft);
+}
+
+.dark .onboarding-chip-active {
+  border-color: rgba(201, 149, 108, 0.35);
+  background: linear-gradient(180deg, #3a342e 0%, #2a2520 100%);
+  box-shadow:
+    0 1px 0 rgba(245, 233, 217, 0.1) inset,
+    0 2px 8px rgba(42, 33, 24, 0.12);
+  color: var(--color-coffee-text);
+}
+
+/* Ensure onboarding primary hover has dark mirror (structure parity) */
+.dark .onboarding-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a4238 0%, #2a2520 100%);
+}
+
+/* Selection color for dark */
+.dark ::selection {
+  background: rgba(201, 149, 108, 0.22);
+  color: var(--color-coffee-text);
+}
+
+/* Guard against any light bg leak in ghost hover */
+.dark .btn-tactile-ghost:hover:not(:disabled) {
+  background: #2a2520;
 }
