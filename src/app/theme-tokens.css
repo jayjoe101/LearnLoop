@@ -1,0 +1,264 @@
+/* Semantic tokens — every value derives from --color-coffee-* palette */
+:root {
+  --color-border-subtle: color-mix(in srgb, var(--color-coffee-text) 10%, transparent);
+  --color-border-mid: color-mix(in srgb, var(--color-coffee-text) 14%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-coffee-text) 18%, transparent);
+  --color-border-focus: color-mix(in srgb, var(--color-coffee-caramel) 45%, transparent);
+  --color-border-accent: color-mix(in srgb, var(--color-coffee-caramel) 28%, transparent);
+  --color-shadow-ink: color-mix(in srgb, var(--color-coffee-charcoal) 12%, transparent);
+  --color-shadow-ink-mid: color-mix(in srgb, var(--color-coffee-charcoal) 8%, transparent);
+  --color-shadow-ink-strong: color-mix(in srgb, var(--color-coffee-charcoal) 18%, transparent);
+  --color-shadow-caramel: color-mix(in srgb, var(--color-coffee-caramel) 12%, transparent);
+  --color-shadow-honey: color-mix(in srgb, var(--color-coffee-honey) 25%, transparent);
+  --color-highlight-inset: color-mix(in srgb, var(--color-coffee-cream) 90%, transparent);
+  --color-surface-glass: color-mix(in srgb, var(--color-coffee-surface) 88%, transparent);
+  --color-surface-overlay: color-mix(in srgb, var(--color-coffee-surface) 94%, transparent);
+  --color-fill-accent: color-mix(in srgb, var(--color-coffee-honey) 12%, transparent);
+  --color-fill-accent-strong: color-mix(in srgb, var(--color-coffee-honey) 35%, transparent);
+  --color-fill-sage: color-mix(in srgb, var(--color-coffee-sage) 12%, transparent);
+  --color-fill-sage-border: color-mix(in srgb, var(--color-coffee-sage) 35%, transparent);
+  --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 28%, transparent);
+  --color-accent-on-fill: var(--color-coffee-text);
+  --gradient-btn-primary: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 48%,
+    var(--color-coffee-elevated) 100%
+  );
+  --gradient-btn-primary-hover: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream) 48%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-btn-secondary: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-elevated) 100%
+  );
+  --gradient-btn-ghost: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-btn-accent: linear-gradient(
+    180deg,
+    var(--color-coffee-honey) 0%,
+    var(--color-coffee-caramel) 100%
+  );
+  --gradient-btn-accent-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-honey) 82%, var(--color-coffee-cream)) 0%,
+    var(--color-coffee-honey) 100%
+  );
+  --gradient-chip: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-tab-active: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-icon-btn: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-post-action: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-post-source: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-onboarding-card: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-cream-soft) 100%
+  );
+  --gradient-onboarding-chip-active: linear-gradient(
+    180deg,
+    var(--color-coffee-cream-soft) 0%,
+    var(--color-coffee-elevated) 100%
+  );
+  --gradient-placeholder: linear-gradient(
+    135deg,
+    var(--color-coffee-cream-soft) 0%,
+    var(--color-coffee-elevated) 50%,
+    var(--color-coffee-cream) 100%
+  );
+  --gradient-highlight-text: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-honey) 35%, transparent) 0%,
+    color-mix(in srgb, var(--color-coffee-honey) 22%, transparent) 100%
+  );
+  --gradient-onboarding-orb: conic-gradient(
+    from 180deg,
+    var(--color-coffee-taupe) 0deg,
+    var(--color-coffee-cream) 120deg,
+    var(--color-coffee-latte) 240deg,
+    var(--color-coffee-honey) 360deg
+  );
+  --shadow-btn-primary: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 0 var(--color-shadow-caramel), 0 4px 14px var(--color-shadow-ink);
+  --shadow-btn-primary-hover: 0 1px 0 var(--color-coffee-surface) inset,
+    0 3px 0 var(--color-shadow-caramel), 0 6px 18px var(--color-shadow-ink-strong);
+  --shadow-btn-primary-active: 0 2px 6px var(--color-shadow-ink) inset,
+    0 1px 3px var(--color-shadow-ink-mid);
+  --shadow-btn-secondary: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 8px var(--color-shadow-ink-mid);
+  --shadow-btn-secondary-hover: 0 1px 0 var(--color-highlight-inset) inset,
+    0 4px 12px var(--color-shadow-ink);
+  --shadow-chip: 0 1px 3px var(--color-shadow-ink-mid);
+  --shadow-tab-active: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 6px var(--color-shadow-ink-mid);
+  --shadow-card: 0 12px 32px var(--color-shadow-ink-mid);
+  --shadow-image-frame: 0 8px 24px var(--color-shadow-ink-mid);
+  --shadow-accent: 0 1px 0 var(--color-highlight-inset) inset,
+    0 3px 12px var(--color-shadow-honey);
+  --shadow-accent-hover: 0 1px 0 var(--color-highlight-inset) inset,
+    0 5px 16px var(--color-shadow-honey);
+  --shadow-post-source: 0 2px 6px var(--color-shadow-ink-mid);
+  --shadow-post-source-hover: 0 4px 10px var(--color-shadow-ink);
+  --shadow-night-now: 0 1px 4px var(--color-shadow-ink);
+  --shadow-night-now-hover: 0 2px 8px var(--color-shadow-ink-strong);
+  --shadow-tab-group-inset: 0 1px 4px var(--color-shadow-ink-mid) inset;
+  --shadow-input-inset: 0 1px 3px var(--color-shadow-ink-mid) inset;
+  --shadow-action-hover: 0 3px 8px var(--color-shadow-ink);
+  --shadow-chip-active: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 8px var(--color-shadow-ink);
+}
+
+.dark {
+  --color-border-subtle: color-mix(in srgb, var(--color-coffee-text) 10%, transparent);
+  --color-border-mid: color-mix(in srgb, var(--color-coffee-text) 14%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-coffee-text) 16%, transparent);
+  --color-border-focus: color-mix(in srgb, var(--color-coffee-honey) 35%, transparent);
+  --color-border-accent: color-mix(in srgb, var(--color-coffee-honey) 28%, transparent);
+  --color-shadow-ink: color-mix(in srgb, var(--color-coffee-charcoal) 22%, transparent);
+  --color-shadow-ink-mid: color-mix(in srgb, var(--color-coffee-charcoal) 12%, transparent);
+  --color-shadow-ink-strong: color-mix(in srgb, var(--color-coffee-charcoal) 28%, transparent);
+  --color-shadow-caramel: color-mix(in srgb, var(--color-coffee-caramel) 18%, transparent);
+  --color-shadow-honey: color-mix(in srgb, var(--color-coffee-honey) 22%, transparent);
+  --color-highlight-inset: color-mix(in srgb, var(--color-coffee-text) 10%, transparent);
+  --color-surface-glass: color-mix(in srgb, var(--color-coffee-surface) 94%, transparent);
+  --color-surface-overlay: color-mix(in srgb, var(--color-coffee-bg) 94%, transparent);
+  --color-fill-accent: color-mix(in srgb, var(--color-coffee-honey) 8%, transparent);
+  --color-fill-accent-strong: color-mix(in srgb, var(--color-coffee-honey) 35%, transparent);
+  --color-fill-sage: color-mix(in srgb, var(--color-coffee-sage) 10%, transparent);
+  --color-fill-sage-border: color-mix(in srgb, var(--color-coffee-sage) 35%, transparent);
+  --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 22%, transparent);
+  --color-accent-on-fill: var(--color-coffee-text);
+  --gradient-btn-primary: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-btn-primary-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-elevated) 88%, var(--color-coffee-text)) 0%,
+    var(--color-coffee-elevated) 100%
+  );
+  --gradient-btn-secondary: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-bg) 100%
+  );
+  --gradient-btn-ghost: var(--color-coffee-surface);
+  --gradient-btn-accent: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-caramel) 78%, var(--color-coffee-charcoal)) 0%,
+    color-mix(in srgb, var(--color-coffee-caramel) 55%, var(--color-coffee-charcoal)) 100%
+  );
+  --gradient-btn-accent-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-caramel) 88%, var(--color-coffee-charcoal)) 0%,
+    color-mix(in srgb, var(--color-coffee-caramel) 78%, var(--color-coffee-charcoal)) 100%
+  );
+  --gradient-chip: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-tab-active: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-icon-btn: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-post-action: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-post-source: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-onboarding-card: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --gradient-onboarding-chip-active: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-elevated) 90%, var(--color-coffee-text)) 0%,
+    var(--color-coffee-elevated) 100%
+  );
+  --gradient-placeholder: linear-gradient(
+    135deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 50%,
+    var(--color-coffee-bg) 100%
+  );
+  --gradient-highlight-text: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-coffee-honey) 28%, transparent) 0%,
+    color-mix(in srgb, var(--color-coffee-honey) 16%, transparent) 100%
+  );
+  --gradient-onboarding-orb: conic-gradient(
+    from 180deg,
+    var(--color-coffee-taupe) 0deg,
+    var(--color-coffee-elevated) 120deg,
+    color-mix(in srgb, var(--color-coffee-elevated) 90%, var(--color-coffee-text)) 240deg,
+    var(--color-coffee-caramel) 360deg
+  );
+  --shadow-btn-primary: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 0 var(--color-shadow-caramel), 0 4px 14px var(--color-shadow-ink);
+  --shadow-btn-primary-hover: 0 1px 0 var(--color-highlight-inset) inset,
+    0 3px 0 var(--color-shadow-caramel), 0 6px 18px var(--color-shadow-ink-strong);
+  --shadow-btn-primary-active: 0 2px 6px var(--color-shadow-ink) inset,
+    0 1px 3px var(--color-shadow-ink-mid);
+  --shadow-btn-secondary: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 8px var(--color-shadow-ink-mid);
+  --shadow-btn-secondary-hover: 0 1px 0 var(--color-highlight-inset) inset,
+    0 4px 12px var(--color-shadow-ink);
+  --shadow-chip: 0 1px 3px var(--color-shadow-ink-mid);
+  --shadow-tab-active: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 6px var(--color-shadow-ink);
+  --shadow-card: 0 12px 32px var(--color-shadow-ink);
+  --shadow-image-frame: 0 8px 24px var(--color-shadow-ink-mid);
+  --shadow-accent: 0 1px 0 var(--color-highlight-inset) inset,
+    0 3px 12px var(--color-shadow-honey);
+  --shadow-accent-hover: 0 1px 0 var(--color-highlight-inset) inset,
+    0 5px 16px var(--color-shadow-honey);
+  --shadow-post-source: 0 2px 6px var(--color-shadow-ink-mid);
+  --shadow-post-source-hover: 0 4px 10px var(--color-shadow-ink);
+  --shadow-night-now: 0 1px 4px var(--color-shadow-ink);
+  --shadow-night-now-hover: 0 2px 8px var(--color-shadow-ink-strong);
+  --shadow-tab-group-inset: 0 1px 4px var(--color-shadow-ink-mid) inset;
+  --shadow-input-inset: 0 1px 3px var(--color-shadow-ink-mid) inset;
+  --shadow-action-hover: 0 3px 8px var(--color-shadow-ink);
+  --shadow-chip-active: 0 1px 0 var(--color-highlight-inset) inset,
+    0 2px 8px var(--color-shadow-ink);
+}

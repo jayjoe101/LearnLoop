@@ -50,7 +50,7 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
   return (
     <div className="flex min-h-screen flex-1 flex-col animate-fade-in">
       <header className="surface-panel sticky top-0 z-20 border-b">
-        <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 py-4 sm:max-w-2xl">
+        <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 py-4 sm:max-w-2xl">
           <div className="min-w-0">
             <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-text)]">
               LearnLoop

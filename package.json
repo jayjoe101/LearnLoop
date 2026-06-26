@@ -8,7 +8,8 @@
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "next lint",
     "env:pull": "vercel env pull .env.local --yes",
-    "verify": "node scripts/verify-integrations.mjs"
+    "verify": "node scripts/verify-integrations.mjs",
+    "test:theme": "node --test scripts/verify-theme.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

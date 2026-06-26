@@ -1,0 +1,36 @@
+/* Sole source of literal palette values — all other CSS references var(--palette-*) */
+:root {
+  --palette-coffee-bg: #faf7f2;
+  --palette-coffee-surface: #fffdf9;
+  --palette-coffee-elevated: #f3ece2;
+  --palette-coffee-text: #2a2118;
+  --palette-coffee-text-soft: #3d3228;
+  --palette-coffee-latte: #5c4f42;
+  --palette-coffee-mocha: #7a6a5a;
+  --palette-coffee-taupe: #9a8b7a;
+  --palette-coffee-charcoal: #1f1812;
+  --palette-coffee-caramel: #a66b3a;
+  --palette-coffee-honey: #c9956c;
+  --palette-coffee-sage: #6d8a5a;
+  --palette-coffee-cream: #faf7f2;
+  --palette-coffee-cream-soft: #f5f0e8;
+  --palette-border: rgba(42, 33, 24, 0.12);
+}
+
+.dark {
+  --palette-coffee-bg: #12100c;
+  --palette-coffee-surface: #1a1713;
+  --palette-coffee-elevated: #252018;
+  --palette-coffee-text: #f8efe3;
+  --palette-coffee-text-soft: #d8c8b4;
+  --palette-coffee-latte: #b0a090;
+  --palette-coffee-mocha: #9a8878;
+  --palette-coffee-taupe: #7a6a58;
+  --palette-coffee-charcoal: #2e2820;
+  --palette-coffee-caramel: #d49562;
+  --palette-coffee-honey: #e0b088;
+  --palette-coffee-sage: #9ab888;
+  --palette-coffee-cream: #252018;
+  --palette-coffee-cream-soft: #1a1713;
+  --palette-border: rgba(248, 239, 227, 0.14);
+}
