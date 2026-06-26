@@ -32,11 +32,13 @@ export function NightNowButton() {
       title={current.title}
       aria-label={current.ariaLabel}
     >
-      {isDark ? (
-        <SunIcon className="h-4 w-4" aria-hidden />
-      ) : (
-        <MoonIcon className="h-4 w-4" aria-hidden />
-      )}
+      <span className="toolbar-icon-glyph toolbar-theme-icon" aria-hidden>
+        {isDark ? (
+          <SunIcon className="h-4 w-4" />
+        ) : (
+          <MoonIcon className="h-4 w-4" />
+        )}
+      </span>
     </button>
   );
 }

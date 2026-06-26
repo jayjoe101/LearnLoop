@@ -21,6 +21,7 @@ type FeedFilter = "all" | "liked";
 export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Props) {
   const [topicInput, setTopicInput] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [isGeneratingInsight, startGenerateInsight] = useTransition();
   const [filter, setFilter] = useState<FeedFilter>("all");
 
   const {
@@ -91,27 +92,32 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
                     liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
                   }`}
                 >
-                  <span
-                    className={`toolbar-live-dot ${
-                      liveOn ? "toolbar-live-dot-active" : ""
-                    }`}
-                    aria-hidden
-                  />
+                  <span className="toolbar-icon-glyph" aria-hidden>
+                    <span
+                      className={`toolbar-live-dot ${
+                        liveOn ? "toolbar-live-dot-active" : ""
+                      }`}
+                    />
+                  </span>
                 </button>
               )}
               <button
                 type="button"
                 title="New insight"
                 aria-label="Generate new insight"
-                disabled={isPending}
+                disabled={isGeneratingInsight}
                 onClick={() =>
-                  startTransition(async () => {
+                  startGenerateInsight(async () => {
                     await generateNewPost();
                   })
                 }
-                className="toolbar-icon-btn"
+                className={`toolbar-icon-btn toolbar-insight-btn ${
+                  isGeneratingInsight ? "toolbar-insight-btn--generating" : ""
+                }`}
               >
-                <SparkIcon className="h-4 w-4" aria-hidden />
+                <span className="toolbar-icon-glyph toolbar-insight-icon" aria-hidden>
+                  <SparkIcon className="h-4 w-4" />
+                </span>
               </button>
               <NightNowButton />
             </div>
