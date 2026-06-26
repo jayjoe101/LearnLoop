@@ -18,7 +18,7 @@ import {
 } from "@/lib/wiki-teaching";
 import { FAST_MODEL } from "@/lib/xai-client";
 import {
-  enrichBodyWithWikiTerms,
+  enrichStoredPostBody,
   finalizePostLinks,
   normalizeWikiTerms,
 } from "@/lib/post-content";
@@ -75,7 +75,7 @@ export const POST_SCHEMA = {
     body: {
       type: "string",
       description:
-        "2-4 short paragraphs with ONE clear teaching goal. Bluntly informative: name the mechanism, define terms, state the concrete takeaway. Explain the complex topic simply so the reader learns something specific. Use **bold** for key terms, *italic* for emphasis, ==highlights== for the single most important insight per paragraph. Wrap technical terms in [[double brackets]]. No filler, throat-clearing, or template phrasing.",
+        "2-4 short paragraphs with ONE clear teaching goal. Bluntly informative: name the mechanism, define terms, state the concrete takeaway. Explain the complex topic simply so the reader learns something specific. Supported formatting (use when relevant): **bold** for key terms, *italic* for emphasis, ==highlight== for the single most important insight per paragraph, [embedded links](url), [[wiki terms]] in double brackets, inline mathematical notation with $...$ (e.g. $E=mc^2$), display equations with $$...$$ on their own line, and fenced code blocks with ```language when code examples help. No filler, throat-clearing, or template phrasing.",
     },
     links: {
       type: "array",
@@ -208,7 +208,7 @@ TEACHING GOAL: Every post must teach ONE specific new thing. Be bluntly informat
 ${scopeRule}
 Title: blunt and informative about the SPECIFIC SUBJECT — state the lesson, not vague intrigue.
 Body: fresh prose every time. No template openers ("most people don't know", "here's the thing", "sounds simple until", etc.).
-Format body with **bold**, *italic*, and ==highlight== markdown.
+Format body using supported markup when it helps clarity: **bold**, *italic*, ==highlight==, [embedded links](url), [[wiki terms]], inline math ($...$), display math ($$...$$ on its own line), and fenced code blocks with a language tag when code is relevant.
 ${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${qualityHint} ${retryHint}`.trim(),
     },
     {
@@ -301,7 +301,7 @@ function parseGeneratedContent(
 
   if (isMetaTopicPost(title, body, topic, wiki_terms)) return null;
 
-  let enrichedBody = enrichBodyWithWikiTerms(
+  let enrichedBody = enrichStoredPostBody(
     normalizeLlmParagraphs(body),
     wiki_terms
   );

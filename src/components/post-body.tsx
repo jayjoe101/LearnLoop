@@ -1,9 +1,14 @@
+"use client";
+
+import React from "react";
 import {
-  enrichBodyWithWikiTerms,
+  enrichBodyBlocks,
+  parseBodyBlocks,
   parseInlineSegments,
   parseRichTextSegments,
-  splitParagraphs,
+  type BodyBlock,
 } from "@/lib/post-content";
+import { highlightCodeToHtml, renderMathToHtml } from "@/lib/post-render";
 import { pickWikiSource } from "@/lib/wiki-links";
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
@@ -95,6 +100,17 @@ function InlineContent({
   return (
     <>
       {segments.map((segment, i) => {
+        if (segment.type === "math-inline") {
+          const html = renderMathToHtml(segment.latex, false);
+          return (
+            <span
+              key={i}
+              className="post-math-inline"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          );
+        }
+
         const content = (
           <LinkSegments text={segment.value} wikiSource={wikiSource} />
         );
@@ -126,6 +142,77 @@ function InlineContent({
   );
 }
 
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const html = highlightCodeToHtml(code, language);
+
+  return (
+    <pre className="post-code-block">
+      <code
+        className={`post-code-block__code language-${language || "text"}`}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </pre>
+  );
+}
+
+function DisplayMath({ latex }: { latex: string }) {
+  const html = renderMathToHtml(latex, true);
+
+  return (
+    <div
+      className="post-math-display"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+/** Serializable description of rendered blocks — used by verification scripts. */
+export function describeRenderedBlocks(
+  blocks: BodyBlock[],
+  wikiSource: "wikipedia" | "grokipedia" = "wikipedia"
+): string[] {
+  return blocks.map((block) => {
+    if (block.type === "paragraph") {
+      const rich = parseRichTextSegments(block.text);
+      const kinds = rich.map((s) => s.type).join(",");
+      const inline = parseInlineSegments(block.text, wikiSource)
+        .map((s) => s.type)
+        .join(",");
+      return `paragraph:rich=[${kinds}] inline=[${inline}]`;
+    }
+    if (block.type === "code") {
+      return `code:lang=${block.language} len=${block.code.length}`;
+    }
+    return `display-math:latex=${block.latex}`;
+  });
+}
+
+function renderBlock(
+  block: BodyBlock,
+  index: number,
+  wikiSource: "wikipedia" | "grokipedia",
+  paragraphIndex: number
+) {
+  if (block.type === "code") {
+    return <CodeBlock key={index} language={block.language} code={block.code} />;
+  }
+
+  if (block.type === "display-math") {
+    return <DisplayMath key={index} latex={block.latex} />;
+  }
+
+  const isLead = paragraphIndex === 0;
+
+  return (
+    <p
+      key={index}
+      className={isLead ? "post-prose-lead" : "post-prose-paragraph"}
+    >
+      <InlineContent text={block.text} wikiSource={wikiSource} />
+    </p>
+  );
+}
+
 export function PostBody({
   body,
   links,
@@ -135,20 +222,23 @@ export function PostBody({
 }: Props) {
   const wikiSource = pickWikiSource(feedStyle, personaId);
   const terms = wikiTerms ?? [];
-  const enrichedBody = enrichBodyWithWikiTerms(body, terms);
-  const paragraphs = splitParagraphs(enrichedBody);
+  const blocks = enrichBodyBlocks(parseBodyBlocks(body), terms);
   const sourceLinks = links ?? [];
+
+  let paragraphIndex = 0;
 
   return (
     <div className="post-prose">
-      {paragraphs.map((paragraph, index) => (
-        <p
-          key={index}
-          className={index === 0 ? "post-prose-lead" : "post-prose-paragraph"}
-        >
-          <InlineContent text={paragraph} wikiSource={wikiSource} />
-        </p>
-      ))}
+      {blocks.map((block, index) => {
+        const node = renderBlock(
+          block,
+          index,
+          wikiSource,
+          block.type === "paragraph" ? paragraphIndex : -1
+        );
+        if (block.type === "paragraph") paragraphIndex += 1;
+        return node;
+      })}
 
       {sourceLinks.length > 0 && (
         <div className="post-sources">

@@ -26,6 +26,10 @@
   --shadow-tooltip: 0 1px 0 var(--color-highlight-inset) inset,
     0 4px 14px var(--color-shadow-ink-mid);
   --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 28%, transparent);
+  --color-code-keyword: var(--color-coffee-caramel);
+  --color-code-string: var(--color-coffee-sage);
+  --color-code-literal: var(--color-coffee-honey);
+  --color-code-comment: var(--color-coffee-taupe);
   --color-accent-on-fill: var(--color-coffee-text);
   --gradient-btn-primary: linear-gradient(
     180deg,
