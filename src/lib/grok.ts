@@ -4,13 +4,17 @@ import {
   isTooSimilar,
 } from "@/lib/dedup";
 import { buildVariedFallbackPost } from "@/lib/fallback-post";
-import { validateGeneratedPost } from "@/lib/post-quality";
+import {
+  validateGeneratedPost,
+  type QualityVerdict,
+} from "@/lib/post-quality";
 import { pickRandomPersona, type Persona } from "@/lib/personas";
 import { discoverConcreteSubject } from "@/lib/subject-discovery";
 import { isMetaTopicPost } from "@/lib/topic-subjects";
 import {
   discoverWikipediaSubject,
   isPlaceholderSubject,
+  resolveSubjectWikipediaCandidates,
 } from "@/lib/wiki-teaching";
 import { FAST_MODEL } from "@/lib/xai-client";
 import {
@@ -292,7 +296,7 @@ async function resolveSubject(
   const explicit = input.concreteSubject?.trim();
   if (explicit && !isPlaceholderSubject(explicit, focus)) return explicit;
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 2; i++) {
     const discovered = await discoverConcreteSubject({
       topic: focus,
       subjectIndex: (input.subjectIndex ?? Date.now()) + attempt + i * 11,
@@ -313,16 +317,23 @@ async function resolveSubject(
   return explicit || focus;
 }
 
+type AcceptResult = {
+  accepted: GeneratedPost | null;
+  quality?: QualityVerdict;
+};
+
 async function acceptGeneratedPost(
   draft: GeneratedPost | null,
   recentTitles: string[],
   recentFingerprints: string[]
-): Promise<GeneratedPost | null> {
-  if (!draft) return null;
-  if (isBoilerplatePost(draft.title, draft.body)) return null;
-  if (isDuplicateContent(draft.title, draft.body, recentFingerprints)) return null;
-  if (isTooSimilar(draft.title, recentTitles)) return null;
-  if (isPlaceholderSubject(draft.subject, draft.topic)) return null;
+): Promise<AcceptResult> {
+  if (!draft) return { accepted: null };
+  if (isBoilerplatePost(draft.title, draft.body)) return { accepted: null };
+  if (isDuplicateContent(draft.title, draft.body, recentFingerprints)) {
+    return { accepted: null };
+  }
+  if (isTooSimilar(draft.title, recentTitles)) return { accepted: null };
+  if (isPlaceholderSubject(draft.subject, draft.topic)) return { accepted: null };
 
   const quality = await validateGeneratedPost({
     topic: draft.topic,
@@ -331,9 +342,9 @@ async function acceptGeneratedPost(
     body: draft.body,
     wikiTerms: draft.wiki_terms,
   });
-  if (!quality.pass) return null;
+  if (!quality.pass) return { accepted: null, quality };
 
-  return draft;
+  return { accepted: draft };
 }
 
 export async function generatePost(
@@ -346,6 +357,7 @@ export async function generatePost(
   const variant = (input.subjectIndex ?? 0) + attempt;
   const focus = pickFocusTopic(input.topics, input.focusTopic);
   const subject = await resolveSubject(input, focus, attempt);
+  const wikiPrefetch = resolveSubjectWikipediaCandidates(subject).catch(() => []);
 
   const baseInput: GeneratePostInput = {
     ...input,
@@ -369,25 +381,20 @@ export async function generatePost(
         attempt + aiTry
       );
 
-      const accepted = await acceptGeneratedPost(
+      const { accepted, quality } = await acceptGeneratedPost(
         draft,
         recentTitles,
         recentFingerprints
       );
       if (accepted) return accepted;
 
-      if (draft) {
-        const quality = await validateGeneratedPost({
-          topic: draft.topic,
-          subject: draft.subject,
-          title: draft.title,
-          body: draft.body,
-          wikiTerms: draft.wiki_terms,
-        });
+      if (quality?.issues.length) {
         qualityFeedback = quality.issues.join("; ");
       }
     }
   }
+
+  await wikiPrefetch;
 
   const explicitSubject = input.concreteSubject?.trim();
   const pinSubject = Boolean(
@@ -395,7 +402,7 @@ export async function generatePost(
   );
   const triedSubjects = new Set<string>([subject]);
 
-  for (let fb = 0; fb < 6; fb++) {
+  for (let fb = 0; fb < 3; fb++) {
     const trySubject = pinSubject
       ? explicitSubject!
       : fb === 0
@@ -415,22 +422,20 @@ export async function generatePost(
     triedSubjects.add(trySubject);
 
     if (apiKey) {
-      for (let aiTry = 0; aiTry < 2; aiTry++) {
-        const persona = pickRandomPersona();
-        const draft = await callXai(
-          apiKey,
-          { ...baseInput, concreteSubject: trySubject },
-          persona,
-          trySubject,
-          attempt + fb + aiTry
-        );
-        const accepted = await acceptGeneratedPost(
-          draft,
-          recentTitles,
-          recentFingerprints
-        );
-        if (accepted) return accepted;
-      }
+      const persona = pickRandomPersona();
+      const draft = await callXai(
+        apiKey,
+        { ...baseInput, concreteSubject: trySubject },
+        persona,
+        trySubject,
+        attempt + fb
+      );
+      const { accepted } = await acceptGeneratedPost(
+        draft,
+        recentTitles,
+        recentFingerprints
+      );
+      if (accepted) return accepted;
     }
 
     const fallback = await buildVariedFallbackPost(
@@ -446,7 +451,7 @@ export async function generatePost(
       variant + fb
     );
 
-    const accepted = await acceptGeneratedPost(
+    const { accepted } = await acceptGeneratedPost(
       fallback,
       recentTitles,
       recentFingerprints

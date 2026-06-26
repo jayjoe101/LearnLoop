@@ -215,7 +215,7 @@ export async function searchWikipediaTitles(
 
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1200 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
     }
 
     try {
@@ -296,7 +296,6 @@ async function enrichCandidateExtract(
 ): Promise<string> {
   if (!subjectNeedsRicherExtract(subject, extract)) return extract;
 
-  await new Promise((resolve) => setTimeout(resolve, 1800));
   const full = await fetchWikipediaFullExtract(title);
   if (full && full.length > extract.length) return full;
   if (extract.length >= 900) return extract;
@@ -323,7 +322,7 @@ async function fetchWikipediaFullExtract(title: string): Promise<string | null> 
 
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
     }
     try {
       const response = await fetch(
@@ -374,7 +373,7 @@ async function searchWithExtracts(
 
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
     }
 
     try {
@@ -400,22 +399,25 @@ async function searchWithExtracts(
       };
 
       const pages = data.query?.pages ?? {};
-      const results: WikiSummary[] = [];
-
-      for (const page of Object.values(pages)) {
-        if (page.pageprops?.disambiguation) continue;
+      const pageList = Object.values(pages).filter((page) => {
+        if (page.pageprops?.disambiguation) return false;
         const title = page.title?.trim() ?? "";
         const extract = page.extract?.trim() ?? "";
-        if (!title || extract.length < 200) continue;
+        return Boolean(title && extract.length >= 200);
+      });
 
-        const enriched = await enrichCandidateExtract(title, extract, subject);
-
-        results.push({
-          title,
-          extract: enriched,
-          url: page.fullurl ?? wikipediaUrl(title),
-        });
-      }
+      const results = await Promise.all(
+        pageList.map(async (page) => {
+          const title = page.title!.trim();
+          const extract = page.extract!.trim();
+          const enriched = await enrichCandidateExtract(title, extract, subject);
+          return {
+            title,
+            extract: enriched,
+            url: page.fullurl ?? wikipediaUrl(title),
+          };
+        })
+      );
 
       return results;
     } catch {
@@ -427,23 +429,21 @@ async function searchWithExtracts(
 }
 
 async function collectSubjectCandidates(subject: string): Promise<WikiSummary[]> {
-  const queries = buildSubjectSearchQueries(subject);
+  const queries = buildSubjectSearchQueries(subject).slice(0, 3);
+  const batches = await Promise.all(
+    queries.map((query) => searchWithExtracts(query, subject, 8))
+  );
+
   const seen = new Set<string>();
   const candidates: WikiSummary[] = [];
 
-  for (let q = 0; q < Math.min(queries.length, 3); q++) {
-    if (q > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-    }
-
-    const batch = await searchWithExtracts(queries[q], subject, 8);
+  for (const batch of batches) {
     for (const entry of batch) {
       if (seen.has(entry.title)) continue;
       seen.add(entry.title);
       candidates.push(entry);
       if (seen.size >= 12) break;
     }
-
     if (seen.size >= 12) break;
   }
 
@@ -473,7 +473,6 @@ export async function resolveSubjectWikipediaCandidates(
 
   let candidates = await collectSubjectCandidates(subject);
   if (candidates.length === 0) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
     candidates = await collectSubjectCandidates(subject);
   }
 
@@ -506,37 +505,48 @@ export async function resolveSubjectWikipediaCandidates(
     }
   }
 
-  for (const titleGuess of titleGuesses) {
-    const direct = await fetchWikipediaSummary(titleGuess);
-    if (!direct || isOffTopicWikiTitle(direct.title)) continue;
-
-    const enriched = await enrichCandidateExtract(
-      direct.title,
-      direct.extract,
-      subject
-    );
-    const entry = { ...direct, extract: enriched };
-    if (!candidates.some((c) => c.title === entry.title)) {
-      candidates.push(entry);
-    }
-  }
-
-  for (const query of buildSubjectSearchQueries(subject).slice(0, 2)) {
-    const titles = await searchWikipediaTitles(query, 4);
-    for (const title of titles.slice(0, 2)) {
-      if (isOffTopicWikiTitle(title)) continue;
-      const direct = await fetchWikipediaSummary(title);
-      if (!direct) continue;
+  const directLookups = await Promise.all(
+    [...titleGuesses].slice(0, 8).map(async (titleGuess) => {
+      const direct = await fetchWikipediaSummary(titleGuess);
+      if (!direct || isOffTopicWikiTitle(direct.title, subject)) return null;
       const enriched = await enrichCandidateExtract(
         direct.title,
         direct.extract,
         subject
       );
-      const entry = { ...direct, extract: enriched };
-      if (!candidates.some((c) => c.title === entry.title)) {
-        candidates.push(entry);
-      }
-    }
+      return { ...direct, extract: enriched };
+    })
+  );
+  for (const entry of directLookups) {
+    if (!entry || candidates.some((c) => c.title === entry.title)) continue;
+    candidates.push(entry);
+  }
+
+  const supplementalQueries = buildSubjectSearchQueries(subject).slice(0, 2);
+  const supplementalTitles = (
+    await Promise.all(
+      supplementalQueries.map((query) => searchWikipediaTitles(query, 4))
+    )
+  )
+    .flat()
+    .filter((title) => !isOffTopicWikiTitle(title, subject))
+    .slice(0, 4);
+
+  const supplementalLookups = await Promise.all(
+    supplementalTitles.map(async (title) => {
+      const direct = await fetchWikipediaSummary(title);
+      if (!direct) return null;
+      const enriched = await enrichCandidateExtract(
+        direct.title,
+        direct.extract,
+        subject
+      );
+      return { ...direct, extract: enriched };
+    })
+  );
+  for (const entry of supplementalLookups) {
+    if (!entry || candidates.some((c) => c.title === entry.title)) continue;
+    candidates.push(entry);
   }
 
   candidates = candidates.filter((candidate) => {
@@ -687,10 +697,14 @@ export async function discoverWikipediaSubject(
     topic,
   ];
 
-  for (let q = 0; q < queries.length; q++) {
-    const query = queries[(seed + q) % queries.length];
-    const titles = await searchWikipediaTitles(query, 12);
+  const titleBatches = await Promise.all(
+    queries.map((_, q) =>
+      searchWikipediaTitles(queries[(seed + q) % queries.length], 12)
+    )
+  );
 
+  for (let q = 0; q < titleBatches.length; q++) {
+    const titles = titleBatches[q];
     for (let i = 0; i < titles.length; i++) {
       const title = titles[(seed + i) % titles.length];
       const key = title.toLowerCase();

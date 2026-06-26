@@ -261,9 +261,13 @@ export async function composeTeachingAnswer(
   const facts = pickSourceFacts(subject, sentences, seed);
   if (facts.length < 2) return null;
 
-  let body: string | null = null;
+  let body = stitchTeachingBody(subject, wikiTerm, facts, persona, seed);
+  let stitched = Boolean(body);
 
-  if (process.env.XAI_API_KEY) {
+  if (
+    !body &&
+    process.env.XAI_API_KEY
+  ) {
     const modelBody = await synthesizeWithModel(subject, wikiTerm, facts, persona);
     if (
       modelBody &&
@@ -273,13 +277,8 @@ export async function composeTeachingAnswer(
       bodyAnswersSubject(subject, modelBody)
     ) {
       body = modelBody;
+      stitched = false;
     }
-  }
-
-  let stitched = false;
-  if (!body) {
-    body = stitchTeachingBody(subject, wikiTerm, facts, persona, seed);
-    stitched = Boolean(body);
   }
 
   if (!body || body.length < 120) return null;

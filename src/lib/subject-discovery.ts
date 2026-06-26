@@ -162,15 +162,20 @@ export async function discoverConcreteSubject(options: {
     ...(options.usedSubjects ?? []),
   ];
 
-  for (let attempt = 0; attempt < DISCOVERY_ATTEMPTS; attempt++) {
-    const subject = await discoverSingleSubject(topic, {
-      recentTitles,
-      avoidSubjects,
-      seed,
-      attempt,
-    });
-    if (subject) return subject;
-  }
+  const parallelSubjects = await Promise.all(
+    Array.from({ length: DISCOVERY_ATTEMPTS }, (_, attempt) =>
+      discoverSingleSubject(topic, {
+        recentTitles,
+        avoidSubjects,
+        seed,
+        attempt,
+      })
+    )
+  );
+  const discovered = parallelSubjects.find(
+    (subject) => subject && !isPlaceholderSubject(subject, topic)
+  );
+  if (discovered) return discovered;
 
   const lastChance = await discoverSingleSubject(topic, {
     recentTitles,
@@ -180,21 +185,21 @@ export async function discoverConcreteSubject(options: {
   });
   if (lastChance && !isPlaceholderSubject(lastChance, topic)) return lastChance;
 
-  for (let wikiTry = 0; wikiTry < 4; wikiTry++) {
-    const wikiSubject = await discoverWikipediaSubject(
-      topic,
-      seed + wikiTry * 13,
-      [...avoidSubjects, ...recentTitles]
-    );
-    if (wikiSubject && !isPlaceholderSubject(wikiSubject, topic)) {
-      return wikiSubject;
-    }
-  }
+  const wikiAvoid = [...avoidSubjects, ...recentTitles];
+  const wikiResults = await Promise.all(
+    Array.from({ length: 4 }, (_, wikiTry) =>
+      discoverWikipediaSubject(topic, seed + wikiTry * 13, wikiAvoid)
+    )
+  );
+  const wikiSubject = wikiResults.find(
+    (candidate) => candidate && !isPlaceholderSubject(candidate, topic)
+  );
+  if (wikiSubject) return wikiSubject;
 
   const emergency = await discoverWikipediaSubject(
     topic,
     seed + Date.now() % 997,
-    [...avoidSubjects, ...recentTitles]
+    wikiAvoid
   );
   if (emergency && !isPlaceholderSubject(emergency, topic)) return emergency;
 
