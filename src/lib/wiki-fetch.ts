@@ -428,12 +428,10 @@ async function searchWithExtracts(
   return [];
 }
 
-async function collectSubjectCandidates(subject: string): Promise<WikiSummary[]> {
-  const queries = buildSubjectSearchQueries(subject).slice(0, 3);
-  const batches = await Promise.all(
-    queries.map((query) => searchWithExtracts(query, subject, 8))
-  );
-
+function mergeCandidateBatches(
+  batches: WikiSummary[][],
+  subject: string
+): WikiSummary[] {
   const seen = new Set<string>();
   const candidates: WikiSummary[] = [];
 
@@ -452,6 +450,30 @@ async function collectSubjectCandidates(subject: string): Promise<WikiSummary[]>
       scoreCandidateRelevance(b.title, b.extract, subject) -
       scoreCandidateRelevance(a.title, a.extract, subject)
   );
+}
+
+async function collectSubjectCandidates(subject: string): Promise<WikiSummary[]> {
+  const queries = buildSubjectSearchQueries(subject).slice(0, 3);
+  const batches = await Promise.all(
+    queries.map((query) => searchWithExtracts(query, subject, 8))
+  );
+  return mergeCandidateBatches(batches, subject);
+}
+
+async function collectSubjectCandidatesSequential(
+  subject: string
+): Promise<WikiSummary[]> {
+  const queries = buildSubjectSearchQueries(subject).slice(0, 3);
+  const batches: WikiSummary[][] = [];
+
+  for (let q = 0; q < queries.length; q++) {
+    if (q > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    batches.push(await searchWithExtracts(queries[q], subject, 8));
+  }
+
+  return mergeCandidateBatches(batches, subject);
 }
 
 export async function resolveSubjectWikipediaSummary(
@@ -473,7 +495,7 @@ export async function resolveSubjectWikipediaCandidates(
 
   let candidates = await collectSubjectCandidates(subject);
   if (candidates.length === 0) {
-    candidates = await collectSubjectCandidates(subject);
+    candidates = await collectSubjectCandidatesSequential(subject);
   }
 
   const titleGuesses = new Set<string>();

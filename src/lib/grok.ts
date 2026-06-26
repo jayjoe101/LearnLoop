@@ -347,10 +347,12 @@ async function acceptGeneratedPost(
   return { accepted: draft };
 }
 
+const MAX_FALLBACK_ITERATIONS = 4;
+
 export async function generatePost(
   input: GeneratePostInput,
   attempt = 0
-): Promise<GeneratedPost> {
+): Promise<GeneratedPost | null> {
   const apiKey = process.env.XAI_API_KEY;
   const recentTitles = input.recentTitles ?? [];
   const recentFingerprints = input.recentFingerprints ?? [];
@@ -396,46 +398,40 @@ export async function generatePost(
 
   await wikiPrefetch;
 
-  const explicitSubject = input.concreteSubject?.trim();
-  const pinSubject = Boolean(
-    explicitSubject && !isPlaceholderSubject(explicitSubject, focus)
-  );
-  const triedSubjects = new Set<string>([subject]);
+  const triedSubjects = new Set<string>();
 
-  for (let fb = 0; fb < 3; fb++) {
-    const trySubject = pinSubject
-      ? explicitSubject!
-      : fb === 0
-        ? subject
-        : await discoverConcreteSubject({
-            topic: focus,
-            subjectIndex: (input.subjectIndex ?? 0) + variant + fb * 17,
-            recentTitles,
-            avoidSubjects: [
-              ...(input.avoidSubjects ?? []),
-              ...(input.usedSubjects ?? []),
-              ...triedSubjects,
-            ],
-          });
+  const tryGenerateForSubject = async (
+    trySubject: string,
+    fbIndex: number
+  ): Promise<GeneratedPost | null> => {
+    if (!trySubject || isPlaceholderSubject(trySubject, focus)) return null;
 
-    if (!trySubject || isPlaceholderSubject(trySubject, focus)) continue;
-    triedSubjects.add(trySubject);
+    const subjectKey = trySubject.toLowerCase().trim();
+    if (triedSubjects.has(subjectKey)) return null;
+    triedSubjects.add(subjectKey);
+
+    if (fbIndex > 0) {
+      await resolveSubjectWikipediaCandidates(trySubject).catch(() => []);
+    }
 
     if (apiKey) {
-      const persona = pickRandomPersona();
-      const draft = await callXai(
-        apiKey,
-        { ...baseInput, concreteSubject: trySubject },
-        persona,
-        trySubject,
-        attempt + fb
-      );
-      const { accepted } = await acceptGeneratedPost(
-        draft,
-        recentTitles,
-        recentFingerprints
-      );
-      if (accepted) return accepted;
+      const aiTries = fbIndex === 0 ? 2 : 1;
+      for (let aiTry = 0; aiTry < aiTries; aiTry++) {
+        const persona = pickRandomPersona();
+        const draft = await callXai(
+          apiKey,
+          { ...baseInput, concreteSubject: trySubject },
+          persona,
+          trySubject,
+          attempt + fbIndex + aiTry
+        );
+        const { accepted } = await acceptGeneratedPost(
+          draft,
+          recentTitles,
+          recentFingerprints
+        );
+        if (accepted) return accepted;
+      }
     }
 
     const fallback = await buildVariedFallbackPost(
@@ -448,7 +444,7 @@ export async function generatePost(
         avoidSubjects: input.avoidSubjects,
       },
       pickRandomPersona(),
-      variant + fb
+      variant + fbIndex
     );
 
     const { accepted } = await acceptGeneratedPost(
@@ -456,8 +452,44 @@ export async function generatePost(
       recentTitles,
       recentFingerprints
     );
+    return accepted;
+  };
+
+  const avoidForDiscovery = () => [
+    ...(input.avoidSubjects ?? []),
+    ...(input.usedSubjects ?? []),
+    ...triedSubjects,
+  ];
+
+  for (let fb = 0; fb < MAX_FALLBACK_ITERATIONS; fb++) {
+    const trySubject =
+      fb === 0
+        ? subject
+        : await discoverConcreteSubject({
+            topic: focus,
+            subjectIndex: (input.subjectIndex ?? 0) + variant + fb * 17,
+            recentTitles,
+            avoidSubjects: avoidForDiscovery(),
+          });
+
+    const accepted = await tryGenerateForSubject(trySubject ?? "", fb);
     if (accepted) return accepted;
   }
 
-  throw new Error(`Failed to generate a teaching post for "${focus}"`);
+  for (let w = 0; w < 3; w++) {
+    const wikiSubject = await discoverWikipediaSubject(
+      focus,
+      variant + 200 + w * 31,
+      avoidForDiscovery()
+    );
+    if (!wikiSubject) continue;
+
+    const accepted = await tryGenerateForSubject(
+      wikiSubject,
+      MAX_FALLBACK_ITERATIONS + w
+    );
+    if (accepted) return accepted;
+  }
+
+  return null;
 }

@@ -105,7 +105,7 @@ export async function buildVariedFallbackPost(
     tries++;
   }
 
-  const candidateLimit = Math.min(candidates.length, 3);
+  const candidateLimit = Math.min(candidates.length, 5);
   for (let c = 0; c < candidateLimit; c++) {
     const summary = candidates[c];
     const extractAttempts: Array<{ extract: string; wikiTitle: string }> = [

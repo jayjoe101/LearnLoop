@@ -303,20 +303,27 @@ async function createUniquePost(
         })) ?? undefined
       : undefined;
 
-    const post = await generatePost(
-      {
-        prompt: options.prompt,
-        topics: options.topicNames,
-        style: options.style,
-        recentTitles: titles,
-        recentFingerprints: fingerprints,
-        avoidSubjects: subjects,
-        focusTopic,
-        concreteSubject,
-        subjectIndex,
-      },
-      attempt
-    );
+    let post: GeneratedPost | null = null;
+    try {
+      post = await generatePost(
+        {
+          prompt: options.prompt,
+          topics: options.topicNames,
+          style: options.style,
+          recentTitles: titles,
+          recentFingerprints: fingerprints,
+          avoidSubjects: subjects,
+          focusTopic,
+          concreteSubject,
+          subjectIndex,
+        },
+        attempt
+      );
+    } catch {
+      post = null;
+    }
+
+    if (!post) continue;
 
     if (
       isBoilerplatePost(post.title, post.body) ||
