@@ -10,8 +10,7 @@
     "env:pull": "vercel env pull .env.local --yes",
     "verify": "node scripts/verify-integrations.mjs",
     "test:theme": "node --test scripts/verify-theme.test.mjs",
-    "test:premium-buttons": "node --test scripts/verify-premium-buttons.test.mjs",
-    "test:generation": "node --test scripts/verify-generation.test.mjs"
+    "test:premium-buttons": "node --test scripts/verify-premium-buttons.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

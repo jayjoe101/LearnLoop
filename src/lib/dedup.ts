@@ -75,14 +75,29 @@ const BOILERPLATE_MARKERS = [
   "actually works like this",
   "explained without the fluff",
   "nobody tells you this about",
-  "interesting world of",
-  "something cool about",
-  "fascinating field of",
+  "the naive story hides the constraint",
+  "how they connect",
+  "forms the chain step by step",
+  "forces the shift because",
+  "is the variable that makes the difference",
+  "sets the constraint",
+  "determines what happens next",
+  "frames the answer to",
+  "is the concept that makes this precise",
+  "lesser-known example within",
 ];
 
-/** Detect templated fallback posts that only swap the subject name. */
+const BOILERPLATE_STRUCTURES = [
+  /\bthe reason:\s*\*[^*]+\*\s*forces the shift\b/i,
+  /\*\w+\*\s*and\s*\*\w+\*\s*form the chain\b/i,
+  /\band\s+\w+\s+and\s+\w+:\s*how they connect\b/i,
+  /\bremember:\s*==the trigger is\b/i,
+];
+
+/** Detect templated posts that only swap keywords into fixed frames. */
 export function isBoilerplatePost(title: string, body: string): boolean {
   const combined = `${title} ${body}`.toLowerCase();
-  const hits = BOILERPLATE_MARKERS.filter((m) => combined.includes(m)).length;
-  return hits >= 2;
+  const markerHits = BOILERPLATE_MARKERS.filter((m) => combined.includes(m)).length;
+  if (markerHits >= 1) return true;
+  return BOILERPLATE_STRUCTURES.some((pattern) => pattern.test(combined));
 }

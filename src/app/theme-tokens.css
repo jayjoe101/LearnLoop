@@ -163,8 +163,8 @@
   --color-fill-caramel-soft: color-mix(in srgb, var(--color-coffee-honey) 20%, transparent);
   --gradient-tooltip: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-coffee-elevated) 82%, var(--color-coffee-text)) 0%,
-    var(--color-coffee-elevated) 100%
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
   );
   --shadow-tooltip: 0 1px 0 var(--color-highlight-inset) inset,
     0 6px 18px var(--color-shadow-ink);

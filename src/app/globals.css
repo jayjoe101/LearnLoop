@@ -467,8 +467,7 @@ button:disabled {
 }
 
 .dark .action-tooltip__label {
-  color: var(--color-coffee-text);
-  background: var(--gradient-tooltip);
+  color: var(--color-coffee-cream);
   border-color: var(--color-border-mid);
 }
 
@@ -668,28 +667,16 @@ button:disabled {
   border-color: var(--color-border-subtle);
 }
 
-.dark .toolbar-icon-btn {
-  color: var(--color-coffee-text-soft);
-}
-
 .dark .toolbar-icon-btn:hover:not(:disabled):not(.toolbar-insight-btn--generating) {
   background: var(--gradient-chip);
-  color: var(--color-coffee-text);
+  color: var(--color-coffee-cream);
   box-shadow: var(--shadow-tab-active);
-}
-
-.dark .toolbar-icon-btn:hover:not(:disabled):not(.toolbar-insight-btn--generating) svg {
-  color: var(--color-coffee-honey);
 }
 
 .dark .toolbar-icon-btn-active {
   background: var(--gradient-chip);
   color: var(--color-coffee-honey);
   box-shadow: var(--shadow-tab-active);
-}
-
-.dark .toolbar-icon-btn-active svg {
-  color: var(--color-coffee-honey);
 }
 
 .dark .toolbar-insight-btn--generating {
@@ -760,11 +747,7 @@ button:disabled {
 }
 
 .dark .night-now-btn:hover:not(:disabled) {
-  color: var(--color-coffee-text);
-}
-
-.dark .night-now-btn:hover:not(:disabled) svg {
-  color: var(--color-coffee-honey);
+  color: var(--color-coffee-cream);
 }
 
 .post-card {
@@ -1293,17 +1276,26 @@ button:disabled {
 .dark .post-action-btn {
   background: var(--gradient-post-action);
   border-color: var(--color-border-subtle);
+  color: var(--color-coffee-text-soft);
 }
 
 .dark .post-action-btn:hover:not(:disabled) {
   background: var(--gradient-chip);
-  color: var(--color-coffee-cream);
+  color: var(--color-coffee-text);
   box-shadow: var(--shadow-tab-active);
+}
+
+.dark .post-action-btn:hover:not(:disabled) svg {
+  color: inherit;
 }
 
 .dark .post-action-btn-active {
   color: var(--color-coffee-honey);
   background: var(--color-fill-accent);
+}
+
+.dark .post-action-btn-active:hover:not(:disabled) {
+  color: var(--color-coffee-honey);
 }
 
 /* Selection color for dark */

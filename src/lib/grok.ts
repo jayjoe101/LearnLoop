@@ -8,6 +8,10 @@ import { validateGeneratedPost } from "@/lib/post-quality";
 import { pickRandomPersona, type Persona } from "@/lib/personas";
 import { discoverConcreteSubject } from "@/lib/subject-discovery";
 import { isMetaTopicPost } from "@/lib/topic-subjects";
+import {
+  discoverWikipediaSubject,
+  isPlaceholderSubject,
+} from "@/lib/wiki-teaching";
 import { FAST_MODEL } from "@/lib/xai-client";
 import {
   enrichBodyWithWikiTerms,
@@ -20,7 +24,7 @@ const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 const XAI_TIMEOUT_MS = 14_000;
 const MAX_GENERATION_ATTEMPTS = 3;
 
-export const POST_SCHEMA = {
+const POST_SCHEMA = {
   type: "object",
   properties: {
     topic: {
@@ -36,12 +40,12 @@ export const POST_SCHEMA = {
     title: {
       type: "string",
       description:
-        "Bluntly informative headline under 90 characters that states what the reader will learn about the SPECIFIC SUBJECT — no clickbait vagueness.",
+        "Blunt, informative headline under 90 characters. State what the reader will learn about the SPECIFIC SUBJECT — no vague teasing or clickbait without substance.",
     },
     body: {
       type: "string",
       description:
-        "2-4 short paragraphs with ONE clear teaching goal: the reader must learn something specific and new. Open by stating what they will understand. Explain the complex subject in plain, simple language — name the mechanism, constraint, or cause plainly. Use **bold** for key terms, *italic* for emphasis, ==highlights== for the single most important takeaway. Wrap technical terms in [[double brackets]]. No filler, hedging, or field overviews.",
+        "2-4 short paragraphs with ONE clear teaching goal. Bluntly informative: name the mechanism, define terms, state the concrete takeaway. Explain the complex topic simply so the reader learns something specific. Use **bold** for key terms, *italic* for emphasis, ==highlights== for the single most important insight per paragraph. Wrap technical terms in [[double brackets]]. No filler, throat-clearing, or template phrasing.",
     },
     links: {
       type: "array",
@@ -104,7 +108,7 @@ function pickFocusTopic(topics: string[], explicit?: string): string {
   return topics[Math.floor(Math.random() * topics.length)];
 }
 
-export function buildMessages(
+function buildMessages(
   input: GeneratePostInput,
   persona: Persona,
   subject: string,
@@ -127,7 +131,7 @@ export function buildMessages(
 
   const task =
     input.prompt?.trim() ||
-    `Teach one specific, new idea about: ${subject} (within "${focus}"). State the learning goal upfront, then explain how/why it works in plain language.`;
+    `Write one teaching post about: ${subject} (within "${focus}"). The reader must learn one specific new thing by the end.`;
 
   const technicalHint = ["researcher", "engineer", "explorer", "skeptic"].includes(
     persona.id
@@ -148,16 +152,12 @@ export function buildMessages(
     {
       role: "system" as const,
       content: `${persona.name} (${persona.role}) on LearnLoop as ${persona.handle}. ${persona.voice}
-
-TEACHING RULES (non-negotiable — persona tone may vary, clarity may not):
-- Every post has ONE explicit goal: the reader learns something specific and new by the end.
-- Wording must be bluntly informative — say what happens, why, and what it means. No vague hype.
-- Explain the complex subject simply: name the mechanism, constraint, or cause in plain language.
-- No field overviews, no "interesting world of X", no filler phrases.
-
+Write in this persona's voice only — tone may vary, clarity does not.
+TEACHING GOAL: Every post must teach ONE specific new thing. Be bluntly informative: say exactly what happens, why, and what to remember. Explain complex ideas in simple, direct language.
 ${scopeRule}
-Title: bluntly states what the reader will learn about the SPECIFIC SUBJECT (under 90 chars).
-Body: open with the learning goal, then teach step-by-step in simple language. Use **bold**, *italic*, and ==highlight==.
+Title: blunt and informative about the SPECIFIC SUBJECT — state the lesson, not vague intrigue.
+Body: fresh prose every time. No template openers ("most people don't know", "here's the thing", "sounds simple until", etc.).
+Format body with **bold**, *italic*, and ==highlight== markdown.
 ${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${qualityHint} ${retryHint}`.trim(),
     },
     {
@@ -284,6 +284,58 @@ async function callXai(
   }
 }
 
+async function resolveSubject(
+  input: GeneratePostInput,
+  focus: string,
+  attempt: number
+): Promise<string> {
+  const explicit = input.concreteSubject?.trim();
+  if (explicit && !isPlaceholderSubject(explicit, focus)) return explicit;
+
+  for (let i = 0; i < 5; i++) {
+    const discovered = await discoverConcreteSubject({
+      topic: focus,
+      subjectIndex: (input.subjectIndex ?? Date.now()) + attempt + i * 11,
+      recentTitles: input.recentTitles,
+      usedSubjects: input.usedSubjects,
+      avoidSubjects: input.avoidSubjects,
+    });
+    if (discovered && !isPlaceholderSubject(discovered, focus)) return discovered;
+  }
+
+  const wikiSubject = await discoverWikipediaSubject(
+    focus,
+    (input.subjectIndex ?? Date.now()) + attempt,
+    [...(input.avoidSubjects ?? []), ...(input.usedSubjects ?? [])]
+  );
+  if (wikiSubject && !isPlaceholderSubject(wikiSubject, focus)) return wikiSubject;
+
+  return explicit || focus;
+}
+
+async function acceptGeneratedPost(
+  draft: GeneratedPost | null,
+  recentTitles: string[],
+  recentFingerprints: string[]
+): Promise<GeneratedPost | null> {
+  if (!draft) return null;
+  if (isBoilerplatePost(draft.title, draft.body)) return null;
+  if (isDuplicateContent(draft.title, draft.body, recentFingerprints)) return null;
+  if (isTooSimilar(draft.title, recentTitles)) return null;
+  if (isPlaceholderSubject(draft.subject, draft.topic)) return null;
+
+  const quality = await validateGeneratedPost({
+    topic: draft.topic,
+    subject: draft.subject,
+    title: draft.title,
+    body: draft.body,
+    wikiTerms: draft.wiki_terms,
+  });
+  if (!quality.pass) return null;
+
+  return draft;
+}
+
 export async function generatePost(
   input: GeneratePostInput,
   attempt = 0
@@ -293,16 +345,7 @@ export async function generatePost(
   const recentFingerprints = input.recentFingerprints ?? [];
   const variant = (input.subjectIndex ?? 0) + attempt;
   const focus = pickFocusTopic(input.topics, input.focusTopic);
-
-  const subject =
-    input.concreteSubject?.trim() ||
-    (await discoverConcreteSubject({
-      topic: focus,
-      subjectIndex: input.subjectIndex ?? Date.now() + attempt,
-      recentTitles,
-      usedSubjects: input.usedSubjects,
-      avoidSubjects: input.avoidSubjects,
-    }));
+  const subject = await resolveSubject(input, focus, attempt);
 
   const baseInput: GeneratePostInput = {
     ...input,
@@ -326,42 +369,75 @@ export async function generatePost(
         attempt + aiTry
       );
 
-      if (!draft || isBoilerplatePost(draft.title, draft.body)) continue;
+      const accepted = await acceptGeneratedPost(
+        draft,
+        recentTitles,
+        recentFingerprints
+      );
+      if (accepted) return accepted;
 
-      const quality = await validateGeneratedPost({
-        topic: draft.topic,
-        subject: draft.subject,
-        title: draft.title,
-        body: draft.body,
-        wikiTerms: draft.wiki_terms,
-      });
-
-      if (!quality.pass) {
+      if (draft) {
+        const quality = await validateGeneratedPost({
+          topic: draft.topic,
+          subject: draft.subject,
+          title: draft.title,
+          body: draft.body,
+          wikiTerms: draft.wiki_terms,
+        });
         qualityFeedback = quality.issues.join("; ");
-        continue;
       }
-
-      return draft;
     }
   }
 
-  for (let fb = 0; fb < 4; fb++) {
-    const fallbackSubject = await discoverConcreteSubject({
-      topic: focus,
-      subjectIndex: (input.subjectIndex ?? 0) + variant + fb + 1,
-      recentTitles,
-      avoidSubjects: [
-        ...(input.avoidSubjects ?? []),
-        ...(input.usedSubjects ?? []),
-        subject,
-      ],
-    });
+  const explicitSubject = input.concreteSubject?.trim();
+  const pinSubject = Boolean(
+    explicitSubject && !isPlaceholderSubject(explicitSubject, focus)
+  );
+  const triedSubjects = new Set<string>([subject]);
+
+  for (let fb = 0; fb < 6; fb++) {
+    const trySubject = pinSubject
+      ? explicitSubject!
+      : fb === 0
+        ? subject
+        : await discoverConcreteSubject({
+            topic: focus,
+            subjectIndex: (input.subjectIndex ?? 0) + variant + fb * 17,
+            recentTitles,
+            avoidSubjects: [
+              ...(input.avoidSubjects ?? []),
+              ...(input.usedSubjects ?? []),
+              ...triedSubjects,
+            ],
+          });
+
+    if (!trySubject || isPlaceholderSubject(trySubject, focus)) continue;
+    triedSubjects.add(trySubject);
+
+    if (apiKey) {
+      for (let aiTry = 0; aiTry < 2; aiTry++) {
+        const persona = pickRandomPersona();
+        const draft = await callXai(
+          apiKey,
+          { ...baseInput, concreteSubject: trySubject },
+          persona,
+          trySubject,
+          attempt + fb + aiTry
+        );
+        const accepted = await acceptGeneratedPost(
+          draft,
+          recentTitles,
+          recentFingerprints
+        );
+        if (accepted) return accepted;
+      }
+    }
 
     const fallback = await buildVariedFallbackPost(
       {
         topics: input.topics,
         focusTopic: focus,
-        concreteSubject: fallbackSubject,
+        concreteSubject: trySubject,
         subjectIndex: input.subjectIndex,
         recentTitles,
         avoidSubjects: input.avoidSubjects,
@@ -370,24 +446,13 @@ export async function generatePost(
       variant + fb
     );
 
-    if (isBoilerplatePost(fallback.title, fallback.body)) continue;
-    if (isDuplicateContent(fallback.title, fallback.body, recentFingerprints)) {
-      continue;
-    }
-    if (isTooSimilar(fallback.title, recentTitles)) continue;
-
-    return fallback;
+    const accepted = await acceptGeneratedPost(
+      fallback,
+      recentTitles,
+      recentFingerprints
+    );
+    if (accepted) return accepted;
   }
 
-  return buildVariedFallbackPost(
-    {
-      topics: input.topics,
-      focusTopic: focus,
-      concreteSubject: subject,
-      subjectIndex: (input.subjectIndex ?? 0) + variant,
-      recentTitles,
-    },
-    pickRandomPersona(),
-    variant + Date.now() % 6
-  );
+  throw new Error(`Failed to generate a teaching post for "${focus}"`);
 }

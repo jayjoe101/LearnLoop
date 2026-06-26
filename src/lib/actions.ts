@@ -295,12 +295,12 @@ async function createUniquePost(
     const subjectIndex = Date.now() + options.postCount + attempt * 17;
 
     const concreteSubject = focusTopic
-      ? await discoverConcreteSubject({
+      ? (await discoverConcreteSubject({
           topic: focusTopic,
           subjectIndex,
           recentTitles: titles,
           avoidSubjects: subjects,
-        })
+        })) ?? undefined
       : undefined;
 
     const post = await generatePost(

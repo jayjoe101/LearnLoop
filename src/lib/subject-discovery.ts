@@ -1,4 +1,8 @@
 import { chatCompletion, FAST_MODEL, parseJsonContent } from "@/lib/xai-client";
+import {
+  discoverWikipediaSubject,
+  isPlaceholderSubject,
+} from "@/lib/wiki-fetch";
 
 const DISCOVERY_ATTEMPTS = 3;
 
@@ -149,7 +153,7 @@ export async function discoverConcreteSubject(options: {
   recentTitles?: string[];
   usedSubjects?: string[];
   avoidSubjects?: string[];
-}): Promise<string> {
+}): Promise<string | null> {
   const topic = options.topic.trim() || "general knowledge";
   const seed = options.subjectIndex ?? Date.now();
   const recentTitles = options.recentTitles ?? [];
@@ -174,7 +178,25 @@ export async function discoverConcreteSubject(options: {
     seed: seed + 99,
     attempt: DISCOVERY_ATTEMPTS,
   });
-  if (lastChance) return lastChance;
+  if (lastChance && !isPlaceholderSubject(lastChance, topic)) return lastChance;
 
-  return `a specific, lesser-known example within ${topic}`;
+  for (let wikiTry = 0; wikiTry < 4; wikiTry++) {
+    const wikiSubject = await discoverWikipediaSubject(
+      topic,
+      seed + wikiTry * 13,
+      [...avoidSubjects, ...recentTitles]
+    );
+    if (wikiSubject && !isPlaceholderSubject(wikiSubject, topic)) {
+      return wikiSubject;
+    }
+  }
+
+  const emergency = await discoverWikipediaSubject(
+    topic,
+    seed + Date.now() % 997,
+    [...avoidSubjects, ...recentTitles]
+  );
+  if (emergency && !isPlaceholderSubject(emergency, topic)) return emergency;
+
+  return null;
 }
