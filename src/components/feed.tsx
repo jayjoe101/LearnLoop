@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
 import { useLivePosting } from "@/hooks/use-live-posting";
 import { PostCard } from "@/components/post-card";
-import { PlusIcon } from "@/components/icons";
+import { PlusIcon, SparkIcon } from "@/components/icons";
 import { NightNowButton } from "@/components/night-now-button";
 import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
 
@@ -50,54 +50,72 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
   return (
     <div className="flex min-h-screen flex-1 flex-col animate-fade-in">
       <header className="surface-panel sticky top-0 z-20 border-b">
-        <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 py-4 sm:max-w-2xl">
-          <div className="min-w-0">
+        <div className="feed-header-bar mx-auto max-w-xl px-5 py-3 sm:max-w-2xl">
+          <div className="feed-header-brand min-w-0">
             <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-text)]">
               LearnLoop
             </h1>
             <p className="text-xs text-[var(--color-coffee-mocha)]">Your feed</p>
           </div>
 
-          <nav className="tab-tactile-group shrink-0">
-            {(
-              [
-                { id: "all" as const, label: "Feed" },
-                { id: "liked" as const, label: "Liked" },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setFilter(tab.id)}
-                className={`tab-tactile ${
-                  filter === tab.id ? "tab-tactile-active" : ""
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+          <div className="feed-header-controls">
+            <nav className="tab-tactile-group shrink-0" aria-label="Feed filters">
+              {(
+                [
+                  { id: "all" as const, label: "Feed" },
+                  { id: "liked" as const, label: "Liked" },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setFilter(tab.id)}
+                  className={`tab-tactile ${
+                    filter === tab.id ? "tab-tactile-active" : ""
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
 
-          {filter === "all" && (
-            <button
-              type="button"
-              onClick={toggleLive}
-              className={`btn-tactile btn-tactile-pill flex shrink-0 items-center gap-2 px-3 py-1.5 text-xs font-medium ${
-                liveOn ? "live-toggle-active" : "btn-tactile-ghost"
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full transition-transform duration-300 ${
-                  liveOn
-                    ? "animate-pulse bg-[var(--color-coffee-sage)] scale-110"
-                    : "bg-[var(--color-coffee-taupe)]"
-                }`}
-                aria-hidden
-              />
-              Live posting
-            </button>
-          )}
-          <NightNowButton />
+            <div className="toolbar-icon-group">
+              {filter === "all" && (
+                <button
+                  type="button"
+                  onClick={toggleLive}
+                  title="Live posting"
+                  aria-label={liveOn ? "Turn off live posting" : "Turn on live posting"}
+                  aria-pressed={liveOn}
+                  className={`toolbar-icon-btn toolbar-live-btn ${
+                    liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
+                  }`}
+                >
+                  <span
+                    className={`toolbar-live-dot ${
+                      liveOn ? "toolbar-live-dot-active" : ""
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              )}
+              <button
+                type="button"
+                title="New insight"
+                aria-label="Generate new insight"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await generateNewPost();
+                  })
+                }
+                className="toolbar-icon-btn"
+              >
+                <SparkIcon className="h-4 w-4" aria-hidden />
+              </button>
+              <NightNowButton />
+            </div>
+          </div>
         </div>
 
         <div

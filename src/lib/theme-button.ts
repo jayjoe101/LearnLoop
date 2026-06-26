@@ -10,16 +10,16 @@ export type NightButtonState = {
 export function getNightNowButtonState(isDark: boolean): NightButtonState {
   if (isDark) {
     return {
-      icon: "☀︎",
-      label: "Day Now",
-      title: "Day Now",
+      icon: "sun",
+      label: "Light mode",
+      title: "Light mode",
       ariaLabel: "Switch to light mode",
     };
   }
   return {
-    icon: "☾",
-    label: "Night Now",
-    title: "Night Now",
-    ariaLabel: "Switch to cozy night mode",
+    icon: "moon",
+    label: "Night mode",
+    title: "Night mode",
+    ariaLabel: "Switch to night mode",
   };
 }
