@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
@@ -14,6 +14,7 @@ const {
   parseInlineSegments,
   enrichBodyBlocks,
   enrichStoredPostBody,
+  normalizePostBodyMarkup,
   splitParagraphs,
 } = await import("../src/lib/post-content.ts");
 
@@ -117,23 +118,38 @@ test("PostBody renderToStaticMarkup includes math and code markup", () => {
   assert.match(html, /katex/);
   assert.match(html, /hljs-title function_/);
   assert.ok(!html.includes("[[solve]]"));
+});
 
-  const described = describeRenderedBlocks(parseBodyBlocks(SAMPLE_1));
-  const scratch =
-    process.env.GROK_GOAL_SCRATCH ??
-    "C:\\Users\\jay\\AppData\\Local\\Temp\\grok-goal-f2a05b709451\\implementer";
-  writeFileSync(
-    join(scratch, "postbody-render.log"),
-    [
-      "describeRenderedBlocks:",
-      ...described,
-      "exit=0",
-      "",
-      "--- PostBody HTML ---",
-      html,
-    ].join("\n") + "\n",
-    "utf8"
+test("normalizePostBodyMarkup converts LaTeX delimiters and closes open fences", () => {
+  const normalized = normalizePostBodyMarkup(
+    "Inline \\(E=mc^2\\) and block \\[x^2\\]\n\n```python\nprint(1)"
   );
+  assert.match(normalized, /\$E=mc\^2\$/);
+  assert.match(normalized, /\$\$x\^2\$\$/);
+  assert.ok(normalized.trimEnd().endsWith("```"));
+});
+
+test("parseBodyBlocks handles single-line fenced code and inline code spans", () => {
+  const blocks = parseBodyBlocks("Try ```javascript const x = 1; ``` here.");
+  const code = blocks.find((b) => b.type === "code");
+  assert.ok(code);
+  assert.equal(code.language, "javascript");
+  assert.match(code.code, /const x = 1/);
+
+  const rich = parseRichTextSegments("Use `pip install numpy` for setup.");
+  assert.ok(rich.some((s) => s.type === "code-inline"));
+});
+
+test("PostBody strips visible fence markers from rendered HTML", () => {
+  const html = renderToStaticMarkup(
+    createElement(PostBody, {
+      body: "Example:\n\n```python\nprint('ok')\n```",
+      links: [],
+      wikiTerms: [],
+    })
+  );
+  assert.match(html, /post-code-block/);
+  assert.ok(!html.includes("```"));
 });
 
 test("describeRenderedBlocks includes code and math containers", () => {

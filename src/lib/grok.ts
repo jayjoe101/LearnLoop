@@ -208,7 +208,7 @@ TEACHING GOAL: Every post must teach ONE specific new thing. Be bluntly informat
 ${scopeRule}
 Title: blunt and informative about the SPECIFIC SUBJECT — state the lesson, not vague intrigue.
 Body: fresh prose every time. No template openers ("most people don't know", "here's the thing", "sounds simple until", etc.).
-Format body using supported markup when it helps clarity: **bold**, *italic*, ==highlight==, [embedded links](url), [[wiki terms]], inline math ($...$), display math ($$...$$ on its own line), and fenced code blocks with a language tag when code is relevant.
+Format body using supported markup when it helps clarity: **bold**, *italic*, ==highlight==, [embedded links](url), [[wiki terms]], inline math with $...$ (never backticks for math), display math with $$...$$ on its own line, inline code with single backticks, and fenced code with opening/closing triple backticks plus a language tag (e.g. \`\`\`python). Never leave raw unclosed \`\`\` markers in the body.
 ${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${qualityHint} ${retryHint}`.trim(),
     },
     {
@@ -492,10 +492,9 @@ export async function generatePost(
       }
     }
 
-    return null;
   }
 
-  for (let fb = 0; fb < 2; fb++) {
+  for (let fb = 0; fb < 3; fb++) {
     const fallback = await buildVariedFallbackPost(
       {
         topics: input.topics,

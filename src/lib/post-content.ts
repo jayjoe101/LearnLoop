@@ -16,7 +16,8 @@ export type RichTextSegment =
   | { type: "bold"; value: string }
   | { type: "italic"; value: string }
   | { type: "highlight"; value: string }
-  | { type: "math-inline"; latex: string };
+  | { type: "math-inline"; latex: string }
+  | { type: "code-inline"; value: string };
 
 export type BodyBlock =
   | { type: "paragraph"; text: string }
@@ -26,7 +27,26 @@ export type BodyBlock =
 const INLINE_PATTERN = /\[\[([^\]]+)\]\]|\[([^\]]+)\]\(([^)]+)\)/g;
 const RICH_TEXT_PATTERN = /\*\*([^*]+)\*\*|\*([^*]+)\*|==([^=]+)==/g;
 const INLINE_MATH_PATTERN = /(?<!\$)\$(?!\$)((?:\\.|[^$\\])+)\$(?!\$)/g;
-const BLOCK_PATTERN = /```([\w-]*)\n?([\s\S]*?)```|\$\$([\s\S]*?)\$\$/g;
+const INLINE_CODE_PATTERN = /(?<!`)`([^`\n]+)`(?!`)/g;
+const BLOCK_PATTERN =
+  /```([\w-]*)\n([\s\S]*?)```|```(\w[-\w]*)\s+([\s\S]+?)```|\$\$([\s\S]*?)\$\$/g;
+
+/** Normalize common model markup mistakes before parsing. */
+export function normalizePostBodyMarkup(body: string): string {
+  let text = body.replace(/\r\n/g, "\n").trim();
+  if (!text) return text;
+
+  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, latex) => `$$${latex.trim()}$$`);
+  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, latex) => `$${latex.trim()}$`);
+  text = text.replace(/```\s*(\w[-\w]*)\s*\n/g, "```$1\n");
+
+  const fenceCount = (text.match(/```/g) ?? []).length;
+  if (fenceCount % 2 === 1) {
+    text = `${text}\n\`\`\``;
+  }
+
+  return text;
+}
 
 export function splitParagraphs(body: string): string[] {
   return body
@@ -37,33 +57,32 @@ export function splitParagraphs(body: string): string[] {
 
 /** Split body into paragraphs, fenced code blocks, and display math blocks. */
 export function parseBodyBlocks(body: string): BodyBlock[] {
+  const normalized = normalizePostBodyMarkup(body);
   const blocks: BodyBlock[] = [];
   let lastIndex = 0;
 
-  for (const match of body.matchAll(BLOCK_PATTERN)) {
+  for (const match of normalized.matchAll(BLOCK_PATTERN)) {
     const index = match.index ?? 0;
 
     if (index > lastIndex) {
-      appendParagraphBlocks(blocks, body.slice(lastIndex, index));
+      appendParagraphBlocks(blocks, normalized.slice(lastIndex, index));
     }
 
     if (match[0].startsWith("```")) {
-      blocks.push({
-        type: "code",
-        language: match[1]?.trim() || "text",
-        code: match[2].trim(),
-      });
+      const language = (match[1] ?? match[3] ?? "").trim() || "text";
+      const code = (match[2] ?? match[4] ?? "").trim();
+      blocks.push({ type: "code", language, code });
     } else {
-      blocks.push({ type: "display-math", latex: match[3].trim() });
+      blocks.push({ type: "display-math", latex: (match[5] ?? "").trim() });
     }
 
     lastIndex = index + match[0].length;
   }
 
-  appendParagraphBlocks(blocks, body.slice(lastIndex));
+  appendParagraphBlocks(blocks, normalized.slice(lastIndex));
 
-  if (blocks.length === 0 && body.trim()) {
-    appendParagraphBlocks(blocks, body);
+  if (blocks.length === 0 && normalized.trim()) {
+    appendParagraphBlocks(blocks, normalized);
   }
 
   return blocks;
@@ -147,18 +166,18 @@ function parseRichTextDecorations(text: string): RichTextSegment[] {
   return segments.length ? segments : [{ type: "plain", value: text }];
 }
 
-export function parseRichTextSegments(text: string): RichTextSegment[] {
+function parseInlineCodeSpans(text: string): RichTextSegment[] {
   const segments: RichTextSegment[] = [];
   let lastIndex = 0;
 
-  for (const match of text.matchAll(INLINE_MATH_PATTERN)) {
+  for (const match of text.matchAll(INLINE_CODE_PATTERN)) {
     const index = match.index ?? 0;
 
     if (index > lastIndex) {
       segments.push(...parseRichTextDecorations(text.slice(lastIndex, index)));
     }
 
-    segments.push({ type: "math-inline", latex: match[1] });
+    segments.push({ type: "code-inline", value: match[1] });
     lastIndex = index + match[0].length;
   }
 
@@ -167,6 +186,28 @@ export function parseRichTextSegments(text: string): RichTextSegment[] {
   }
 
   return segments.length ? segments : parseRichTextDecorations(text);
+}
+
+export function parseRichTextSegments(text: string): RichTextSegment[] {
+  const segments: RichTextSegment[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(INLINE_MATH_PATTERN)) {
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      segments.push(...parseInlineCodeSpans(text.slice(lastIndex, index)));
+    }
+
+    segments.push({ type: "math-inline", latex: match[1] });
+    lastIndex = index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push(...parseInlineCodeSpans(text.slice(lastIndex)));
+  }
+
+  return segments.length ? segments : parseInlineCodeSpans(text);
 }
 
 export function normalizePostLinks(
@@ -238,14 +279,17 @@ export function normalizeWikiTerms(
   return normalized.slice(0, 4);
 }
 
-type InlineMathSpan = { text: string; protected: boolean };
+type ProtectedSpan = { text: string; protected: boolean };
 
-/** Split paragraph text into math-delimited spans so wiki enrichment skips $...$ regions. */
-function partitionByInlineMath(text: string): InlineMathSpan[] {
-  const spans: InlineMathSpan[] = [];
+const PROTECTED_INLINE_PATTERN =
+  /(?<!\$)\$(?!\$)((?:\\.|[^$\\])+)\$(?!\$)|(?<!`)`([^`\n]+)`(?!`)/g;
+
+/** Split paragraph text so wiki enrichment skips math and inline-code regions. */
+function partitionProtectedSpans(text: string): ProtectedSpan[] {
+  const spans: ProtectedSpan[] = [];
   let lastIndex = 0;
 
-  for (const match of text.matchAll(INLINE_MATH_PATTERN)) {
+  for (const match of text.matchAll(PROTECTED_INLINE_PATTERN)) {
     const index = match.index ?? 0;
 
     if (index > lastIndex) {
@@ -287,7 +331,7 @@ export function enrichBodyWithWikiTerms(
 ): string {
   if (!wikiTerms.length) return body;
 
-  return partitionByInlineMath(body)
+  return partitionProtectedSpans(body)
     .map((span) =>
       span.protected
         ? span.text
@@ -342,8 +386,9 @@ export function enrichStoredPostBody(
   body: string,
   wikiTerms: PostWikiTerm[]
 ): string {
-  if (!wikiTerms.length) return body;
+  const normalized = normalizePostBodyMarkup(body);
+  if (!wikiTerms.length) return normalized;
   return serializeBodyBlocks(
-    enrichBodyBlocks(parseBodyBlocks(body), wikiTerms)
+    enrichBodyBlocks(parseBodyBlocks(normalized), wikiTerms)
   );
 }

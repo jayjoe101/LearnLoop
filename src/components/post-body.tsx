@@ -111,6 +111,14 @@ function InlineContent({
           );
         }
 
+        if (segment.type === "code-inline") {
+          return (
+            <code key={i} className="post-inline-code">
+              {segment.value}
+            </code>
+          );
+        }
+
         const content = (
           <LinkSegments text={segment.value} wikiSource={wikiSource} />
         );

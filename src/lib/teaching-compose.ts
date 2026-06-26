@@ -20,14 +20,6 @@ export type ComposedTeaching = {
 const CAUSAL_MARKERS =
   /\b(because|since|after|when|if|therefore|thus|so|as a result|due to|trigger|triggers|cause|causes|leads to|results in|means|indicates|signals|treats?|interpret)\b/i;
 
-const PERSONA_LEADS: Partial<Record<string, string[]>> = {
-  everyday: ["Here's the deal: ", "Quick lesson: ", ""],
-  skeptic: ["Wait — ", "Actually: ", ""],
-  journalist: ["", "The short version: "],
-  storyteller: ["", "Picture this: "],
-  philosopher: ["", "The core idea: "],
-};
-
 function splitSentences(text: string): string[] {
   return text
     .replace(/\n+/g, " ")
@@ -157,12 +149,6 @@ function pickSourceFacts(
   return ordered.slice(0, 3);
 }
 
-function personaOpener(persona: Persona | undefined, seed: number): string {
-  if (!persona) return "";
-  const options = PERSONA_LEADS[persona.id] ?? [""];
-  return options[seed % options.length] ?? "";
-}
-
 function bridgeWhyMechanism(fact: string, mode: string): string {
   if (mode !== "why" || !CAUSAL_MARKERS.test(fact)) return fact;
   if (/^Because\b/i.test(fact) || /\bbecause\b/i.test(fact)) return fact;
@@ -183,21 +169,27 @@ function stitchTeachingBody(
   const context = facts[0];
   const mechanism = facts.length >= 3 ? facts[1] : facts[0];
   const answer = facts[facts.length - 1];
-
-  const opener = personaOpener(persona, seed);
-  const paragraphs: string[] = [];
-
-  paragraphs.push(`**[[${wikiTerm}]]** — ${opener}${context}`);
-
-  if (facts.length >= 3) {
-    const middle = bridgeWhyMechanism(mechanism, goal.mode);
-    const answerCore = answer.replace(/\.$/, "");
-    if (middle !== context && middle !== answerCore) paragraphs.push(middle);
-  }
-
   const highlight = answer.replace(/\.$/, "").replace(/^Because\s+/i, "");
   if (highlight.length < 20) return null;
-  paragraphs.push(`==${highlight}==.`);
+
+  const variant = seed % 3;
+  const paragraphs: string[] = [];
+
+  if (variant === 0) {
+    paragraphs.push(`**[[${wikiTerm}]]** connects to ${subject.toLowerCase()}: ${context}`);
+    if (facts.length >= 3) {
+      const middle = bridgeWhyMechanism(mechanism, goal.mode);
+      if (middle !== context) paragraphs.push(middle);
+    }
+    paragraphs.push(`The takeaway: ==${highlight}==.`);
+  } else if (variant === 1) {
+    paragraphs.push(context);
+    if (facts.length >= 3) paragraphs.push(bridgeWhyMechanism(mechanism, goal.mode));
+    paragraphs.push(`For **[[${wikiTerm}]]**, ==${highlight}==.`);
+  } else {
+    paragraphs.push(`When studying ${subject.toLowerCase()}, start with **[[${wikiTerm}]]**: ${context}`);
+    paragraphs.push(`==${highlight}==.`);
+  }
 
   const body = paragraphs.join("\n\n");
   if (!isCoherentTeachingBody(body, subject)) return null;
@@ -229,7 +221,8 @@ Each post has ONE teaching goal: the reader must learn something concrete and ne
 Do not copy Wikipedia sentences verbatim. State what happens, why/how, and one concrete takeaway.
 The ==highlighted== sentence must directly answer the subject question — not a general definition or unrelated application.
 Use plain, direct language — explain the complex topic simply without filler or vague phrasing.
-Use **bold**, ==highlight== on the key insight, and [[${wikiTerm}]] for the wiki link in the opening line.
+Use **bold**, ==highlight== on the key insight, and [[${wikiTerm}]] somewhere natural. For math use $...$ or $$...$$; for code use fenced \`\`\`language blocks or single-backtick inline code — never leave raw triple-backtick markers.
+Write fresh prose — no template openers like "Here's the deal" or "Quick lesson".
 ${voiceHint}`,
       },
       {
@@ -261,13 +254,10 @@ export async function composeTeachingAnswer(
   const facts = pickSourceFacts(subject, sentences, seed);
   if (facts.length < 2) return null;
 
-  let body = stitchTeachingBody(subject, wikiTerm, facts, persona, seed);
-  let stitched = Boolean(body);
+  let body: string | null = null;
+  let stitched = false;
 
-  if (
-    !body &&
-    process.env.XAI_API_KEY
-  ) {
+  if (process.env.XAI_API_KEY) {
     const modelBody = await synthesizeWithModel(subject, wikiTerm, facts, persona);
     if (
       modelBody &&
@@ -277,8 +267,12 @@ export async function composeTeachingAnswer(
       bodyAnswersSubject(subject, modelBody)
     ) {
       body = modelBody;
-      stitched = false;
     }
+  }
+
+  if (!body) {
+    body = stitchTeachingBody(subject, wikiTerm, facts, persona, seed);
+    stitched = Boolean(body);
   }
 
   if (!body || body.length < 120) return null;
