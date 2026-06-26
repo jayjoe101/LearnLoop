@@ -22,6 +22,7 @@ import {
   finalizePostLinks,
   normalizeWikiTerms,
 } from "@/lib/post-content";
+import { validateGeneratedPostReferences } from "@/lib/validate-post-references";
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
@@ -353,7 +354,8 @@ async function callXai(
       const result = parseGeneratedContent(content, input, subject);
       if (!result) return null;
 
-      return { ...result, persona };
+      const validated = await validateGeneratedPostReferences(result);
+      return { ...validated, persona };
     } catch {
       if (apiTry === 0) continue;
       return null;
@@ -508,8 +510,11 @@ export async function generatePost(
       variant + fb
     );
 
+    if (!fallback) continue;
+
+    const validated = await validateGeneratedPostReferences(fallback);
     const { accepted } = await acceptGeneratedPost(
-      fallback,
+      validated,
       recentTitles,
       recentFingerprints
     );
