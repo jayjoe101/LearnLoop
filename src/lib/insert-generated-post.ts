@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GeneratedPost } from "./grok";
-import { attachPostImage, shouldAttemptPostImage } from "./post-images";
+import {
+  attachPostImage,
+  resolvePostImageUrl,
+  shouldAttemptPostImage,
+} from "./post-images";
 import { personaToAuthorFields } from "./post-author";
 import type { Post } from "./types";
 
@@ -23,12 +27,12 @@ export async function insertGeneratedPost(
     topic: post.topic,
     title: post.title,
     subject: post.subject,
-    body: post.body,
     links: post.links,
     wiki_terms: post.wiki_terms,
   };
 
   const wantsImage = shouldAttemptPostImage();
+  const imageUrl = wantsImage ? await resolvePostImageUrl(imageCtx) : null;
 
   const { data: inserted, error } = await supabase
     .from("posts")
@@ -37,7 +41,7 @@ export async function insertGeneratedPost(
       topic: post.topic,
       title: post.title,
       body: post.body,
-      image_url: null,
+      image_url: imageUrl,
       wants_image: wantsImage,
       links: post.links,
       wiki_terms: post.wiki_terms,
@@ -52,8 +56,8 @@ export async function insertGeneratedPost(
   if (error || !inserted) return null;
 
   const postId = inserted.id as string;
-  if (wantsImage) {
-    void attachPostImage(supabase, postId, imageCtx);
+  if (wantsImage && !imageUrl) {
+    attachPostImage(supabase, postId, imageCtx);
   }
 
   return mapRowToPost(inserted as Record<string, unknown>);

@@ -14,6 +14,7 @@ import {
   pickRandomTopic,
 } from "@/lib/generation-context";
 import { insertGeneratedPost } from "@/lib/insert-generated-post";
+import { attachPostImageSync } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
 
@@ -207,7 +208,7 @@ export async function fetchPostImageUrl(postId: string) {
   const { supabase, user } = await requireUser();
   const { data } = await supabase
     .from("posts")
-    .select("image_url, wants_image")
+    .select("image_url, wants_image, topic, title, links, wiki_terms")
     .eq("id", postId)
     .eq("user_id", user.id)
     .single();
@@ -216,7 +217,19 @@ export async function fetchPostImageUrl(postId: string) {
     return { imageUrl: null };
   }
 
-  return { imageUrl: (data?.image_url as string | null) ?? null };
+  const existing = (data.image_url as string | null) ?? null;
+  if (existing) return { imageUrl: existing };
+
+  const wikiTerms = (data.wiki_terms as Post["wiki_terms"]) ?? [];
+  const attached = await attachPostImageSync(supabase, postId, {
+    topic: data.topic as string,
+    title: data.title as string,
+    subject: wikiTerms[0]?.term,
+    links: (data.links as Post["links"]) ?? [],
+    wiki_terms: wikiTerms,
+  });
+
+  return { imageUrl: attached };
 }
 
 async function createUniquePost(

@@ -1,7 +1,20 @@
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
-const WIKI_REQUEST_TIMEOUT_MS = 2_500;
+const WIKI_REQUEST_TIMEOUT_MS = 4_500;
 const THUMB_SIZE = 800;
+const WIKI_USER_AGENT =
+  "LearnLoop/1.0 (educational feed; contact: learnloop-app)";
+
+function wikiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, {
+    ...init,
+    headers: {
+      "User-Agent": WIKI_USER_AGENT,
+      Accept: "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+}
 
 const ALLOWED_IMAGE_HOSTS = [
   "upload.wikimedia.org",
@@ -135,17 +148,56 @@ export function isAllowedImageUrl(url: string): boolean {
   }
 }
 
+function isUsableImageUrl(url: string): boolean {
+  if (!isAllowedImageUrl(url)) return false;
+  const lower = url.toLowerCase();
+  if (lower.includes(".webm") || lower.includes("/video/")) return false;
+  return /\.(jpg|jpeg|png|gif|webp|svg)/i.test(lower) || lower.includes("/thumb/");
+}
+
 function normalizeImageUrls(urls: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
 
   for (const raw of urls) {
-    if (!isAllowedImageUrl(raw) || seen.has(raw)) continue;
+    if (!isUsableImageUrl(raw) || seen.has(raw)) continue;
     seen.add(raw);
     out.push(raw);
   }
 
   return out;
+}
+
+function encodeWikiTitle(title: string): string {
+  return encodeURIComponent(title.trim().replace(/ /g, "_"));
+}
+
+/** Fast REST summary lookup — often the most reliable thumbnail source. */
+async function fetchWikipediaRestThumbnails(
+  titles: string[]
+): Promise<string[]> {
+  const urls: string[] = [];
+
+  for (const title of titles.slice(0, 4)) {
+    if (!title.trim()) continue;
+    try {
+      const response = await wikiFetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeWikiTitle(title)}`,
+        { signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS) }
+      );
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as {
+        thumbnail?: { source?: string };
+      };
+      const src = data.thumbnail?.source;
+      if (src && isUsableImageUrl(src)) urls.push(src);
+    } catch {
+      // try next title
+    }
+  }
+
+  return normalizeImageUrls(urls);
 }
 
 async function fetchWikipediaImagesBatch(
@@ -165,7 +217,7 @@ async function fetchWikipediaImagesBatch(
       redirects: "1",
     });
 
-    const response = await fetch(
+    const response = await wikiFetch(
       `https://en.wikipedia.org/w/api.php?${params}`,
       {
         signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
@@ -209,7 +261,7 @@ async function fetchWikipediaSearchImages(
       pithumbsize: String(THUMB_SIZE),
     });
 
-    const response = await fetch(
+    const response = await wikiFetch(
       `https://en.wikipedia.org/w/api.php?${params}`,
       {
         signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
@@ -263,7 +315,7 @@ async function fetchCommonsSearchImages(
       iiurlwidth: String(THUMB_SIZE),
     });
 
-    const response = await fetch(
+    const response = await wikiFetch(
       `https://commons.wikimedia.org/w/api.php?${params}`,
       {
         signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
@@ -315,7 +367,8 @@ export async function fetchImageCandidates(
   const titles = buildTitleCandidates(ctx);
   const search = buildSearchQuery(ctx);
 
-  const [fromTitles, fromSearch, fromCommons] = await Promise.all([
+  const [fromRest, fromTitles, fromSearch, fromCommons] = await Promise.all([
+    fetchWikipediaRestThumbnails(titles),
     fetchWikipediaImagesBatch(titles),
     fetchWikipediaSearchImages(search, limit),
     fetchCommonsSearchImages(search, limit),
@@ -323,6 +376,7 @@ export async function fetchImageCandidates(
 
   const seen = new Set<string>();
   const urls: string[] = [];
+  appendUniqueUrls(urls, seen, fromRest, limit);
   appendUniqueUrls(urls, seen, fromTitles, limit);
   appendUniqueUrls(urls, seen, fromSearch, limit);
   appendUniqueUrls(urls, seen, fromCommons, limit);

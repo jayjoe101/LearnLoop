@@ -13,6 +13,7 @@
     "test:premium-buttons": "node --test scripts/verify-premium-buttons.test.mjs",
     "test:generation": "node --import tsx --test scripts/verify-generation.test.mjs",
     "test:post-format": "node --import tsx --test scripts/verify-post-content-format.test.mjs",
+    "test:post-images": "node --import tsx --test scripts/verify-post-images.test.mjs",
     "verify:generation-primary": "node --import tsx scripts/verify-generation-primary.mjs"
   },
   "dependencies": {
