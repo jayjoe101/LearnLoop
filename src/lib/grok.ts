@@ -14,7 +14,6 @@ import { isMetaTopicPost } from "@/lib/topic-subjects";
 import {
   discoverWikipediaSubject,
   isPlaceholderSubject,
-  resolveSubjectWikipediaCandidates,
 } from "@/lib/wiki-teaching";
 import { FAST_MODEL } from "@/lib/xai-client";
 import {
@@ -25,8 +24,10 @@ import {
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 12_000;
-const MAX_GENERATION_ATTEMPTS = 2;
+const XAI_TIMEOUT_MS = 10_000;
+const MAX_PRIMARY_ATTEMPTS = 2;
+
+const DEFERRED_SUBJECT_PREFIX = "deferred:";
 
 export type GenerationPath = "primary" | "fallback";
 
@@ -38,6 +39,18 @@ export function peekLastGenerationPath(): GenerationPath | null {
 
 export function resetGenerationPath(): void {
   lastGenerationPath = null;
+}
+
+function isDeferredSubject(subject: string): boolean {
+  return subject.startsWith(DEFERRED_SUBJECT_PREFIX);
+}
+
+function deferredSubjectForTopic(focus: string): string {
+  return `${DEFERRED_SUBJECT_PREFIX}${focus}`;
+}
+
+function topicFromDeferred(subject: string): string {
+  return subject.slice(DEFERRED_SUBJECT_PREFIX.length);
 }
 
 export const POST_SCHEMA = {
@@ -143,11 +156,18 @@ export function buildMessages(
     ? "Do NOT reuse the same insight, facts, or wording as any recent post."
     : "";
 
-  const scopeRule = `SCOPE RULE: "${focus}" is an interest AREA filter only. Write about this SPECIFIC subject: "${subject}". Do NOT write about "${focus}" as a field or overview.`;
+  const deferred = isDeferredSubject(subject);
+  const focusArea = deferred ? topicFromDeferred(subject) : focus;
+
+  const scopeRule = deferred
+    ? `SCOPE RULE: "${focusArea}" is an interest AREA filter only. YOU must pick ONE specific teachable subject inside this area and write about that subject — never the area label itself, never a field overview.`
+    : `SCOPE RULE: "${focus}" is an interest AREA filter only. Write about this SPECIFIC subject: "${subject}". Do NOT write about "${focus}" as a field or overview.`;
 
   const task =
     input.prompt?.trim() ||
-    `Write one teaching post about: ${subject} (within "${focus}"). The reader must learn one specific new thing by the end.`;
+    (deferred
+      ? `Pick ONE fresh, specific subject inside "${focusArea}" and write a teaching post about it. The reader must learn one specific new thing by the end.`
+      : `Write one teaching post about: ${subject} (within "${focus}"). The reader must learn one specific new thing by the end.`);
 
   const technicalHint = ["researcher", "engineer", "explorer", "skeptic"].includes(
     persona.id
@@ -161,8 +181,12 @@ export function buildMessages(
 
   const retryHint =
     attempt > 0
-      ? "RETRY: completely different angle, title, and body."
+      ? "RETRY: completely different angle, title, subject, and body."
       : "";
+
+  const subjectLine = deferred
+    ? `Specific subject: YOU CHOOSE — return your chosen subject in the JSON "subject" field (must be a concrete concept inside "${focusArea}", not the area name).`
+    : `Specific subject (required): ${subject}`;
 
   return [
     {
@@ -180,7 +204,7 @@ ${technicalHint} Include 1-3 real source links in the links array (Wikipedia for
       role: "user" as const,
       content: `Interest areas: ${interests}
 Interest tag: ${focus}
-Specific subject (required): ${subject}
+${subjectLine}
 
 Avoid these titles:
 ${avoid}
@@ -245,6 +269,9 @@ function parseGeneratedContent(
     parsed.topic?.trim() || pickFocusTopic(input.topics, input.focusTopic);
   const resolvedSubject = parsed.subject?.trim() || subject;
 
+  if (isDeferredSubject(resolvedSubject)) return null;
+  if (isPlaceholderSubject(resolvedSubject, topic)) return null;
+
   if (body.length < 80) return null;
   if (isTooSimilar(title, input.recentTitles ?? [])) return null;
   if (isDuplicateContent(title, body, input.recentFingerprints ?? [])) {
@@ -303,10 +330,15 @@ async function callXai(
 async function resolveSubject(
   input: GeneratePostInput,
   focus: string,
-  attempt: number
+  attempt: number,
+  hasApiKey: boolean
 ): Promise<string> {
   const explicit = input.concreteSubject?.trim();
   if (explicit && !isPlaceholderSubject(explicit, focus)) return explicit;
+
+  if (hasApiKey) {
+    return deferredSubjectForTopic(focus);
+  }
 
   const discovered = await discoverConcreteSubject({
     topic: focus,
@@ -335,7 +367,8 @@ type AcceptResult = {
 async function acceptGeneratedPost(
   draft: GeneratedPost | null,
   recentTitles: string[],
-  recentFingerprints: string[]
+  recentFingerprints: string[],
+  options?: { fastPath?: boolean }
 ): Promise<AcceptResult> {
   if (!draft) return { accepted: null };
   if (isBoilerplatePost(draft.title, draft.body)) return { accepted: null };
@@ -351,13 +384,12 @@ async function acceptGeneratedPost(
     title: draft.title,
     body: draft.body,
     wikiTerms: draft.wiki_terms,
+    skipModelReview: options?.fastPath,
   });
   if (!quality.pass) return { accepted: null, quality };
 
   return { accepted: draft };
 }
-
-const MAX_FALLBACK_ITERATIONS = 3;
 
 export async function generatePost(
   input: GeneratePostInput,
@@ -370,7 +402,7 @@ export async function generatePost(
   const recentFingerprints = input.recentFingerprints ?? [];
   const variant = (input.subjectIndex ?? 0) + attempt;
   const focus = pickFocusTopic(input.topics, input.focusTopic);
-  const subject = await resolveSubject(input, focus, attempt);
+  const subject = await resolveSubject(input, focus, attempt, Boolean(apiKey));
 
   const baseInput: GeneratePostInput = {
     ...input,
@@ -380,11 +412,10 @@ export async function generatePost(
 
   if (apiKey) {
     let qualityFeedback = input.qualityFeedback;
-    const usedSubjects = [...(input.usedSubjects ?? []), subject];
 
-    for (let aiTry = 0; aiTry < MAX_GENERATION_ATTEMPTS; aiTry++) {
+    for (let aiTry = 0; aiTry < MAX_PRIMARY_ATTEMPTS; aiTry++) {
       const persona = pickRandomPersona();
-      const tryInput = { ...baseInput, qualityFeedback, usedSubjects };
+      const tryInput = { ...baseInput, qualityFeedback };
 
       const draft = await callXai(
         apiKey,
@@ -397,7 +428,8 @@ export async function generatePost(
       const { accepted, quality } = await acceptGeneratedPost(
         draft,
         recentTitles,
-        recentFingerprints
+        recentFingerprints,
+        { fastPath: true }
       );
       if (accepted) {
         lastGenerationPath = "primary";
@@ -408,118 +440,28 @@ export async function generatePost(
         qualityFeedback = quality.issues.join("; ");
       }
     }
-  }
-
-  const triedSubjects = new Set<string>();
-
-  const tryGenerateForSubject = async (
-    trySubject: string,
-    fbIndex: number
-  ): Promise<GeneratedPost | null> => {
-    if (!trySubject || isPlaceholderSubject(trySubject, focus)) return null;
-
-    const subjectKey = trySubject.toLowerCase().trim();
-    if (triedSubjects.has(subjectKey)) return null;
-    triedSubjects.add(subjectKey);
-
-    let wikiCandidates = await resolveSubjectWikipediaCandidates(trySubject).catch(
-      () => []
-    );
-    if (wikiCandidates.length === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      wikiCandidates = await resolveSubjectWikipediaCandidates(trySubject).catch(
-        () => []
-      );
-    }
-
-    if (apiKey) {
-      const aiTries = fbIndex === 0 ? 2 : 1;
-      for (let aiTry = 0; aiTry < aiTries; aiTry++) {
-        const persona = pickRandomPersona();
-        const draft = await callXai(
-          apiKey,
-          { ...baseInput, concreteSubject: trySubject },
-          persona,
-          trySubject,
-          attempt + fbIndex + aiTry
-        );
-        const { accepted } = await acceptGeneratedPost(
-          draft,
-          recentTitles,
-          recentFingerprints
-        );
-        if (accepted) {
-          lastGenerationPath = "fallback";
-          return accepted;
-        }
-      }
-    }
-
-    if (wikiCandidates.length === 0) return null;
-
-    for (let variantTry = 0; variantTry < 3; variantTry++) {
-      const fallback = await buildVariedFallbackPost(
-        {
-          topics: input.topics,
-          focusTopic: focus,
-          concreteSubject: trySubject,
-          subjectIndex: (input.subjectIndex ?? 0) + variantTry * 9,
-          recentTitles,
-          avoidSubjects: input.avoidSubjects,
-        },
-        pickRandomPersona(),
-        variant + fbIndex + variantTry * 5
-      );
-
-      const { accepted } = await acceptGeneratedPost(
-        fallback,
-        recentTitles,
-        recentFingerprints
-      );
-      if (accepted) {
-        lastGenerationPath = "fallback";
-        return accepted;
-      }
-    }
 
     return null;
-  };
-
-  const avoidForDiscovery = () => [
-    ...(input.avoidSubjects ?? []),
-    ...(input.usedSubjects ?? []),
-    ...triedSubjects,
-  ];
-
-  for (let fb = 0; fb < MAX_FALLBACK_ITERATIONS; fb++) {
-    const trySubject =
-      fb === 0
-        ? subject
-        : await discoverConcreteSubject({
-            topic: focus,
-            subjectIndex: (input.subjectIndex ?? 0) + variant + fb * 17,
-            recentTitles,
-            avoidSubjects: avoidForDiscovery(),
-          });
-
-    const accepted = await tryGenerateForSubject(trySubject ?? "", fb);
-    if (accepted) {
-      lastGenerationPath = "fallback";
-      return accepted;
-    }
   }
 
-  for (let w = 0; w < 2; w++) {
-    const wikiSubject = await discoverWikipediaSubject(
-      focus,
-      variant + 200 + w * 31,
-      avoidForDiscovery()
+  for (let fb = 0; fb < 2; fb++) {
+    const fallback = await buildVariedFallbackPost(
+      {
+        topics: input.topics,
+        focusTopic: focus,
+        concreteSubject: isDeferredSubject(subject) ? undefined : subject,
+        subjectIndex: (input.subjectIndex ?? 0) + fb * 11,
+        recentTitles,
+        avoidSubjects: input.avoidSubjects,
+      },
+      pickRandomPersona(),
+      variant + fb
     );
-    if (!wikiSubject) continue;
 
-    const accepted = await tryGenerateForSubject(
-      wikiSubject,
-      MAX_FALLBACK_ITERATIONS + w
+    const { accepted } = await acceptGeneratedPost(
+      fallback,
+      recentTitles,
+      recentFingerprints
     );
     if (accepted) {
       lastGenerationPath = "fallback";

@@ -247,6 +247,8 @@ export async function validateGeneratedPost(options: {
   title: string;
   body: string;
   wikiTerms: PostWikiTerm[];
+  /** Primary LLM path: strict local checks only — skips extra model review round-trip. */
+  skipModelReview?: boolean;
 }): Promise<QualityVerdict> {
   const local = runLocalQualityChecks(
     options.title,
@@ -258,7 +260,7 @@ export async function validateGeneratedPost(options: {
 
   if (!local.pass) return local;
 
-  if (!process.env.XAI_API_KEY) {
+  if (!process.env.XAI_API_KEY || options.skipModelReview) {
     return local;
   }
 

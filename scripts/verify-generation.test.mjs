@@ -27,7 +27,10 @@ test("generation prompts and schema mandate teaching clarity", () => {
   assert.match(grokSrc, /export const POST_SCHEMA/);
   assert.match(grokSrc, /export function buildMessages/);
   assert.match(grokSrc, /lastGenerationPath = "primary"/);
+  assert.match(grokSrc, /deferredSubjectForTopic/);
+  assert.match(grokSrc, /skipModelReview/);
   assert.doesNotMatch(actionsSrc, /discoverConcreteSubject/);
+  assert.doesNotMatch(actionsSrc, /fetchValidatedPostImage/);
 
   assert.doesNotMatch(fallbackSrc, /TITLE_BUILDERS/);
   assert.doesNotMatch(fallbackSrc, /BODY_BUILDERS/);
