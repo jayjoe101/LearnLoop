@@ -524,7 +524,7 @@ button:disabled {
 }
 
 .dark .post-card {
-  background: var(--color-coffee-surface);
+  background: var(--color-coffee-bg);
   border-color: var(--color-border);
 }
 
