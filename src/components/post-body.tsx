@@ -238,7 +238,7 @@ export function PostBody({
 
   return (
     <PostTextSelection>
-    <div className="post-prose">
+    <div className="post-prose" data-post-prose>
       {blocks.map((block, index) => {
         const node = renderBlock(
           block,

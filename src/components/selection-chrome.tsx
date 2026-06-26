@@ -30,6 +30,7 @@ export function SelectionChrome() {
   const liveId = useId();
   const rafRef = useRef(0);
   const isPointerDownRef = useRef(false);
+  const shouldFinalizeToolbarRef = useRef(false);
   const highlightRef = useRef<DocumentSelection | null>(null);
   const showToolbarRef = useRef(false);
 
@@ -47,9 +48,10 @@ export function SelectionChrome() {
     setShowToolbar(false);
     setCopied(false);
     setSelectionHighlightActive(false);
+    shouldFinalizeToolbarRef.current = false;
   }, []);
 
-  const syncHighlight = useCallback(() => {
+  const runSync = useCallback(() => {
     const next = readDocumentSelection();
     if (!next) {
       clearChrome();
@@ -58,31 +60,50 @@ export function SelectionChrome() {
 
     setHighlight(next);
     setSelectionHighlightActive(true);
+
+    const wantsToolbar =
+      shouldFinalizeToolbarRef.current || !isPointerDownRef.current;
+
+    if (wantsToolbar) {
+      const toolbarSelection = readPostToolbarSelection(
+        TOOLBAR_OFFSET,
+        TOOLBAR_WIDTH
+      );
+      setPostToolbar(toolbarSelection);
+      setShowToolbar(Boolean(toolbarSelection));
+      shouldFinalizeToolbarRef.current = false;
+      if (!toolbarSelection) {
+        setCopied(false);
+      }
+      return;
+    }
+
+    setShowToolbar(false);
+    setCopied(false);
   }, [clearChrome]);
 
-  const syncPostToolbar = useCallback((show = true) => {
-    const next = readPostToolbarSelection(TOOLBAR_OFFSET, TOOLBAR_WIDTH);
-    setPostToolbar(next);
-    setShowToolbar(Boolean(show && next));
-    if (!next) {
-      setCopied(false);
-    }
-  }, []);
-
-  const scheduleSync = useCallback(
+  const queueSync = useCallback(
     (options: { finalizeToolbar?: boolean } = {}) => {
+      if (options.finalizeToolbar) {
+        shouldFinalizeToolbarRef.current = true;
+      }
+
       cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        syncHighlight();
-        if (options.finalizeToolbar || !isPointerDownRef.current) {
-          syncPostToolbar(options.finalizeToolbar ?? !isPointerDownRef.current);
-        } else {
-          setShowToolbar(false);
-          setCopied(false);
-        }
-      });
+
+      const run = () => {
+        runSync();
+      };
+
+      if (shouldFinalizeToolbarRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = requestAnimationFrame(run);
+        });
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(run);
     },
-    [syncHighlight, syncPostToolbar]
+    [runSync]
   );
 
   const restoreAfterThemeChange = useCallback(() => {
@@ -110,21 +131,18 @@ export function SelectionChrome() {
       }
 
       isPointerDownRef.current = true;
+      shouldFinalizeToolbarRef.current = false;
       setShowToolbar(false);
       setCopied(false);
     };
 
     const onPointerUp = () => {
       isPointerDownRef.current = false;
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        syncHighlight();
-        syncPostToolbar(true);
-      });
+      queueSync({ finalizeToolbar: true });
     };
 
     const onSelectionChange = () => {
-      scheduleSync({ finalizeToolbar: !isPointerDownRef.current });
+      queueSync();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -141,18 +159,18 @@ export function SelectionChrome() {
           event.key === "Home" ||
           event.key === "End")
       ) {
-        scheduleSync({ finalizeToolbar: true });
+        queueSync({ finalizeToolbar: true });
       }
     };
 
     const onScroll = () => {
       if (!highlightRef.current) return;
-      scheduleSync({ finalizeToolbar: showToolbarRef.current });
+      queueSync({ finalizeToolbar: showToolbarRef.current });
     };
 
     const onResize = () => {
       if (!highlightRef.current) return;
-      scheduleSync({ finalizeToolbar: showToolbarRef.current });
+      queueSync({ finalizeToolbar: showToolbarRef.current });
     };
 
     document.addEventListener("pointerdown", onPointerDown);
@@ -172,7 +190,7 @@ export function SelectionChrome() {
       window.removeEventListener("resize", onResize);
       setSelectionHighlightActive(false);
     };
-  }, [clearChrome, scheduleSync, syncHighlight, syncPostToolbar]);
+  }, [clearChrome, queueSync]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {

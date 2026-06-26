@@ -123,13 +123,39 @@ export function getActiveDocumentRange(): Range | null {
 }
 
 export function rangeIntersectsElement(range: Range, element: HTMLElement): boolean {
-  const elementRange = document.createRange();
-  elementRange.selectNodeContents(element);
+  if (element.contains(range.startContainer) || element.contains(range.endContainer)) {
+    return true;
+  }
 
-  return (
-    range.compareBoundaryPoints(Range.END_TO_START, elementRange) > 0 &&
-    range.compareBoundaryPoints(Range.START_TO_END, elementRange) < 0
+  const ancestor = range.commonAncestorContainer;
+  if (element.contains(ancestor)) {
+    return true;
+  }
+
+  try {
+    const elementRange = document.createRange();
+    elementRange.selectNodeContents(element);
+
+    return (
+      range.compareBoundaryPoints(Range.END_TO_START, elementRange) > 0 &&
+      range.compareBoundaryPoints(Range.START_TO_END, elementRange) < 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function getPostProseElements(): HTMLElement[] {
+  const seen = new Set<HTMLElement>();
+  const matches = document.querySelectorAll<HTMLElement>(
+    "[data-post-prose], .post-text-selection .post-prose"
   );
+
+  for (const element of matches) {
+    seen.add(element);
+  }
+
+  return Array.from(seen);
 }
 
 export function readDocumentSelection(): DocumentSelection | null {
@@ -155,9 +181,7 @@ export function readPostToolbarSelection(
   const text = window.getSelection()?.toString() ?? "";
   if (!text.trim()) return null;
 
-  const proseElements = document.querySelectorAll<HTMLElement>(
-    ".post-text-selection .post-prose"
-  );
+  const proseElements = getPostProseElements();
 
   for (const prose of proseElements) {
     if (!rangeIntersectsElement(range, prose)) continue;
