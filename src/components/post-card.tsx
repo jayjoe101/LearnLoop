@@ -21,12 +21,15 @@ type Props = {
   index?: number;
 };
 
-const IMAGE_POLL_DELAYS_MS = [1500, 2000, 2500, 3000, 3500];
+const IMAGE_POLL_DELAYS_MS = [1200, 1800, 2400];
 
 export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [imageUrl, setImageUrl] = useState(post.image_url);
-  const [imageSettled, setImageSettled] = useState(!!post.image_url);
+  const expectsImage = post.wants_image === true;
+  const [imageSettled, setImageSettled] = useState(
+    !!post.image_url || !expectsImage
+  );
   const [likedPulse, setLikedPulse] = useState(false);
   const likeTooltip = useActionTooltip({
     label: interaction?.liked ? "Liked" : "Like",
@@ -38,15 +41,16 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
   });
   const author = resolvePostAuthor(post);
 
-  const slotOpen = !!imageUrl || !imageSettled;
+  const showImageSlot =
+    !!imageUrl || (expectsImage && !imageSettled);
 
   useEffect(() => {
     setImageUrl(post.image_url);
-    setImageSettled(!!post.image_url);
-  }, [post.image_url]);
+    setImageSettled(!!post.image_url || !expectsImage);
+  }, [post.image_url, expectsImage]);
 
   useEffect(() => {
-    if (imageUrl || imageSettled) return;
+    if (!expectsImage || imageUrl || imageSettled) return;
 
     let cancelled = false;
     let attempt = 0;
@@ -78,7 +82,7 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [post.id, imageUrl, imageSettled]);
+  }, [post.id, expectsImage, imageUrl, imageSettled]);
 
   function handleLike() {
     if (interaction?.liked) return;
@@ -105,28 +109,29 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
         createdAt={post.created_at}
       />
 
-      <div
-        className={`post-image-slot ${
-          slotOpen ? "post-image-slot--open" : "post-image-slot--closed"
-        }`}
-        aria-hidden={!slotOpen}
-      >
-        {imageUrl ? (
-          <div className="post-image-frame animate-image-in">
-            <Image
-              src={imageUrl}
-              alt=""
-              fill
-              className="object-cover transition duration-700 group-hover:scale-[1.02]"
-              sizes="(max-width: 640px) 100vw, 640px"
-            />
-          </div>
-        ) : !imageSettled ? (
-          <div className="post-image-placeholder">
-            <span className="post-image-placeholder-label">{post.topic}</span>
-          </div>
-        ) : null}
-      </div>
+      {showImageSlot ? (
+        <div
+          className={`post-image-slot ${
+            showImageSlot ? "post-image-slot--open" : "post-image-slot--closed"
+          }`}
+        >
+          {imageUrl ? (
+            <div className="post-image-frame animate-image-in">
+              <Image
+                src={imageUrl}
+                alt=""
+                fill
+                className="object-cover transition duration-700 group-hover:scale-[1.02]"
+                sizes="(max-width: 640px) 100vw, 640px"
+              />
+            </div>
+          ) : (
+            <div className="post-image-placeholder">
+              <span className="post-image-placeholder-label">{post.topic}</span>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div className="post-content-after-image">
         <h2 className="post-title">{post.title}</h2>

@@ -20,6 +20,8 @@ export type Post = {
   title: string;
   body: string;
   image_url: string | null;
+  /** True only when this post was selected to attempt an image at creation. */
+  wants_image: boolean;
   likes_count: number;
   comments_count: number;
   source: "grok" | "seed" | "remix";

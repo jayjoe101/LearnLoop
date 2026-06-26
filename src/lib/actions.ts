@@ -96,6 +96,7 @@ export async function getFeedData(): Promise<{
     ...post,
     links: post.links ?? [],
     wiki_terms: post.wiki_terms ?? [],
+    wants_image: Boolean(post.wants_image),
   }));
 
   return {
@@ -211,6 +212,7 @@ function mapRowToPost(row: Record<string, unknown>): Post {
     ...(row as Post),
     links: (row.links as Post["links"]) ?? [],
     wiki_terms: (row.wiki_terms as Post["wiki_terms"]) ?? [],
+    wants_image: Boolean(row.wants_image),
   };
 }
 
@@ -229,6 +231,8 @@ async function insertGeneratedPost(
     wiki_terms: post.wiki_terms,
   };
 
+  const wantsImage = shouldAttemptPostImage();
+
   const { data: inserted, error } = await supabase
     .from("posts")
     .insert({
@@ -237,6 +241,7 @@ async function insertGeneratedPost(
       title: post.title,
       body: post.body,
       image_url: null,
+      wants_image: wantsImage,
       links: post.links,
       wiki_terms: post.wiki_terms,
       likes_count: 300 + Math.floor(Math.random() * 500),
@@ -250,7 +255,7 @@ async function insertGeneratedPost(
   if (error || !inserted) return null;
 
   const postId = inserted.id as string;
-  if (shouldAttemptPostImage()) {
+  if (wantsImage) {
     attachPostImage(supabase, postId, imageCtx);
   }
 
@@ -261,10 +266,14 @@ export async function fetchPostImageUrl(postId: string) {
   const { supabase, user } = await requireUser();
   const { data } = await supabase
     .from("posts")
-    .select("image_url")
+    .select("image_url, wants_image")
     .eq("id", postId)
     .eq("user_id", user.id)
     .single();
+
+  if (!data?.wants_image) {
+    return { imageUrl: null };
+  }
 
   return { imageUrl: (data?.image_url as string | null) ?? null };
 }
