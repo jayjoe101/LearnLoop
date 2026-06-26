@@ -110,7 +110,7 @@ export function OnboardingFlow() {
             <button
               type="button"
               onClick={goNext}
-              className="onboarding-btn-primary mt-10 w-full floaty-lift"
+              className="onboarding-btn-primary mt-10 w-full"
             >
               Get started
             </button>
@@ -135,7 +135,7 @@ export function OnboardingFlow() {
                     key={topic}
                     type="button"
                     onClick={() => toggleTopic(topic)}
-                    className={`onboarding-chip floaty-lift ${active ? "onboarding-chip-active" : ""}`}
+                    className={`onboarding-chip ${active ? "onboarding-chip-active" : ""}`}
                     style={{ animationDelay: `${i * 35}ms` }}
                   >
                     {topic}
@@ -151,7 +151,7 @@ export function OnboardingFlow() {
                     key={topic}
                     type="button"
                     onClick={() => toggleTopic(topic)}
-                    className="onboarding-chip onboarding-chip-active floaty-lift"
+                    className="onboarding-chip onboarding-chip-active"
                     style={{ animationDelay: `${i * 35}ms` }}
                     aria-label={`Remove ${topic}`}
                   >
@@ -173,7 +173,7 @@ export function OnboardingFlow() {
                 type="button"
                 onClick={addCustomTopic}
                 disabled={!customTopic.trim() || selectedTopics.length >= MAX_TOPICS}
-                className="onboarding-btn-secondary shrink-0 px-4 floaty-lift"
+                className="onboarding-btn-secondary shrink-0 px-4"
               >
                 Add
               </button>
@@ -193,7 +193,7 @@ export function OnboardingFlow() {
               type="button"
               onClick={goNext}
               disabled={selectedTopics.length < MIN_TOPICS || isPending}
-              className="onboarding-btn-primary mt-8 w-full disabled:opacity-40 floaty-lift"
+              className="onboarding-btn-primary mt-8 w-full disabled:opacity-40"
             >
               Build my feed
             </button>

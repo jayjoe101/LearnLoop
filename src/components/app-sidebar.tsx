@@ -49,7 +49,7 @@ export function AppSidebar({ topics }: Props) {
                     await removeTopic(topic.id);
                   })
                 }
-                className="chip-tactile btn-tactile floaty-lift"
+                className="chip-tactile btn-tactile"
               >
                 {topic.name}
               </button>
@@ -65,7 +65,7 @@ export function AppSidebar({ topics }: Props) {
             <button
               type="submit"
               disabled={isPending || !topicInput.trim()}
-              className="btn-tactile icon-btn p-1.5 disabled:opacity-40 floaty-lift"
+              className="btn-tactile icon-btn p-1.5 disabled:opacity-40"
               aria-label="Add topic"
             >
               <PlusIcon className="h-3.5 w-3.5" />
@@ -83,7 +83,7 @@ export function AppSidebar({ topics }: Props) {
               await generateNewPost();
             })
           }
-          className="btn-tactile btn-tactile-primary flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs floaty-lift"
+          className="btn-tactile btn-tactile-primary flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs"
         >
           <SparkIcon className="h-3.5 w-3.5" />
           {isPending ? "Generating…" : "New insight"}

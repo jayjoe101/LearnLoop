@@ -13,11 +13,12 @@ type Props = {
   topics: Topic[];
   interactions: Record<string, PostInteraction>;
   feedStyle?: FeedStyle;
+  hasXaiKey?: boolean;
 };
 
 type FeedFilter = "all" | "liked";
 
-export function Feed({ posts, topics, interactions, feedStyle }: Props) {
+export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Props) {
   const [topicInput, setTopicInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [filter, setFilter] = useState<FeedFilter>("all");

@@ -15,6 +15,7 @@ type Props = {
 export function InsightScrollApp({
   posts,
   topics,
+  profile,
   interactions,
   hasXaiKey,
 }: Props) {
@@ -23,8 +24,10 @@ export function InsightScrollApp({
       <AppSidebar topics={topics} />
       <Feed
         posts={posts}
+        topics={topics}
         interactions={interactions}
         hasXaiKey={hasXaiKey}
+        feedStyle={profile?.feed_style}
       />
     </div>
   );
