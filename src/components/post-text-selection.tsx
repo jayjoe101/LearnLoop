@@ -101,9 +101,25 @@ function getRangeHighlightRects(range: Range): HighlightRect[] {
   return mergeSelectionRects(relative);
 }
 
-function readSelection(
-  container: HTMLElement
-): HighlightState | null {
+function getBoundsFromRects(rects: HighlightRect[]) {
+  const first = rects[0];
+  let top = first.top;
+  let left = first.left;
+  let right = first.left + first.width;
+  let bottom = first.top + first.height;
+
+  for (let i = 1; i < rects.length; i += 1) {
+    const rect = rects[i];
+    top = Math.min(top, rect.top);
+    left = Math.min(left, rect.left);
+    right = Math.max(right, rect.left + rect.width);
+    bottom = Math.max(bottom, rect.top + rect.height);
+  }
+
+  return { top, left, right, bottom };
+}
+
+function readSelection(container: HTMLElement): HighlightState | null {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
     return null;
@@ -111,23 +127,31 @@ function readSelection(
 
   const range = selection.getRangeAt(0);
   const ancestor = range.commonAncestorContainer;
-  if (!container.contains(ancestor)) return null;
+  const element =
+    ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement : (ancestor as Element);
+  if (!element || !container.contains(element)) return null;
 
   const text = selection.toString();
   if (!text.trim()) return null;
 
-  const rect = range.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return null;
-
   const rects = getRangeHighlightRects(range);
   if (rects.length === 0) return null;
+
+  const bounds = getBoundsFromRects(rects);
 
   return {
     text,
     rects,
-    toolbarTop: rect.top - TOOLBAR_OFFSET,
-    toolbarLeft: rect.right - TOOLBAR_WIDTH,
+    toolbarTop: bounds.top - TOOLBAR_OFFSET,
+    toolbarLeft: bounds.right - TOOLBAR_WIDTH,
   };
+}
+
+function shouldIgnoreOutsidePointer(target: Node) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest(".feed-header-controls, .post-selection-toolbar"))
+  );
 }
 
 function preventSelectionCollapse(event: React.MouseEvent) {
@@ -156,24 +180,27 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
     setCopied(false);
   }, []);
 
-  const syncHighlight = useCallback((finalize = false) => {
-    const container = containerRef.current;
-    if (!container) {
-      clearHighlight();
-      return;
-    }
+  const syncHighlight = useCallback(
+    (finalize = false) => {
+      const container = containerRef.current;
+      if (!container) {
+        clearHighlight();
+        return;
+      }
 
-    const next = readSelection(container);
-    if (!next) {
-      clearHighlight();
-      return;
-    }
+      const next = readSelection(container);
+      if (!next) {
+        clearHighlight();
+        return;
+      }
 
-    setHighlight(next);
-    if (finalize) {
-      setShowToolbar(true);
-    }
-  }, [clearHighlight]);
+      setHighlight(next);
+      if (finalize) {
+        setShowToolbar(true);
+      }
+    },
+    [clearHighlight]
+  );
 
   const scheduleSync = useCallback(
     (finalize = false) => {
@@ -182,6 +209,17 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
     },
     [syncHighlight]
   );
+
+  const restoreAfterThemeChange = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const next = readSelection(container);
+    if (!next) return;
+
+    setHighlight(next);
+    setShowToolbar(true);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -197,10 +235,12 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
     const onMouseUp = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-      scheduleSync(true);
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => syncHighlight(true));
     };
 
     const onSelectionChange = () => {
+      if (!isDraggingRef.current) return;
       scheduleSync(false);
     };
 
@@ -234,7 +274,20 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
     };
-  }, [clearHighlight, scheduleSync]);
+  }, [clearHighlight, scheduleSync, syncHighlight]);
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      requestAnimationFrame(restoreAfterThemeChange);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, [restoreAfterThemeChange]);
 
   useEffect(() => {
     if (!showToolbar) return;
@@ -243,6 +296,7 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
       const target = event.target as Node;
       if (toolbarRef.current?.contains(target)) return;
       if (containerRef.current?.contains(target)) return;
+      if (shouldIgnoreOutsidePointer(target)) return;
       clearHighlight();
     };
 
