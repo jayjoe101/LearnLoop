@@ -10,7 +10,7 @@ export type QualityVerdict = {
 const LOCAL_CHECKS = [
   (_title: string, body: string) =>
     body.length < 120 ? "Body is too short" : null,
-  (title: string, _body: string) =>
+  (title: string) =>
     title.length < 12 ? "Title is too short" : null,
   (_title: string, body: string) =>
     !/\[\[[^\]]+\]\]/.test(body) ? "Missing [[wiki-linked]] terms" : null,

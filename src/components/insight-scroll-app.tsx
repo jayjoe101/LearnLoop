@@ -9,22 +9,22 @@ type Props = {
   topics: Topic[];
   profile: Profile | null;
   interactions: Record<string, PostInteraction>;
+  hasXaiKey: boolean;
 };
 
 export function InsightScrollApp({
   posts,
   topics,
-  profile,
   interactions,
+  hasXaiKey,
 }: Props) {
   return (
     <div className="flex min-h-screen">
       <AppSidebar topics={topics} />
       <Feed
         posts={posts}
-        topics={topics}
         interactions={interactions}
-        feedStyle={profile?.feed_style}
+        hasXaiKey={hasXaiKey}
       />
     </div>
   );
