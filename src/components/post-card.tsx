@@ -7,7 +7,8 @@ import {
   likePost,
   markNotInterested,
 } from "@/lib/actions";
-import { HeartIcon } from "@/components/icons";
+import { ActionTooltipLabel } from "@/components/action-tooltip-label";
+import { EyeOffIcon, HeartIcon } from "@/components/icons";
 import { PostAuthor } from "@/components/post-author";
 import { PostBody } from "@/components/post-body";
 import { resolvePostAuthor } from "@/lib/post-author";
@@ -136,7 +137,8 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
           type="button"
           disabled={isPending || interaction?.liked}
           onClick={handleLike}
-          className={`btn-tactile post-action-btn ${
+          aria-label={interaction?.liked ? "Liked" : "Like post"}
+          className={`btn-tactile post-action-btn post-action-btn--like action-tooltip action-tooltip--above ${
             interaction?.liked ? "post-action-btn-active" : ""
           }`}
         >
@@ -150,19 +152,24 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
             }`}
           />
           <span>{post.likes_count}</span>
+          <ActionTooltipLabel>
+            {interaction?.liked ? "Liked" : "Like"}
+          </ActionTooltipLabel>
         </button>
 
         <button
           type="button"
           disabled={isPending}
+          aria-label="Hide post"
           onClick={() =>
             startTransition(async () => {
               await markNotInterested(post.id);
             })
           }
-          className="btn-tactile post-action-btn ml-auto"
+          className="btn-tactile post-action-btn post-action-btn--hide action-tooltip action-tooltip--above ml-auto"
         >
-          Hide
+          <EyeOffIcon className="h-4 w-4" />
+          <ActionTooltipLabel>Hide post</ActionTooltipLabel>
         </button>
       </div>
     </article>

@@ -48,6 +48,14 @@ export function MoonIcon({ className }: IconProps) {
   );
 }
 
+export function EyeOffIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 3l18 18M10.58 10.58A2 2 0 0 0 12 15a2 2 0 0 0 1.42-.58M9.88 5.09A10.94 10.94 0 0 1 12 5c5 0 9.27 3.11 11 7.5a11.8 11.8 0 0 1-2.16 3.19M6.61 6.61A11.37 11.37 0 0 0 3 12.5C4.73 16.89 9 20 14 20a10.8 10.8 0 0 0 4.12-.79" />
+    </svg>
+  );
+}
+
 export function SunIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

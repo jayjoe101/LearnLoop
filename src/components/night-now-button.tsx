@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useLayoutEffect } from "react";
+import { ActionTooltipLabel } from "@/components/action-tooltip-label";
 import { MoonIcon, SunIcon } from "@/components/icons";
 import { handleNightNowToggle } from "@/lib/night-now-toggle";
 import { getNightNowButtonState } from "@/lib/theme-button";
@@ -28,8 +29,7 @@ export function NightNowButton() {
         handleNightNowToggle();
         setIsDark(document.documentElement.classList.contains("dark"));
       }}
-      className="night-now-btn toolbar-icon-btn"
-      title={current.title}
+      className="night-now-btn action-tooltip action-tooltip--below toolbar-icon-btn"
       aria-label={current.ariaLabel}
     >
       <span className="toolbar-icon-glyph toolbar-theme-icon" aria-hidden>
@@ -39,6 +39,7 @@ export function NightNowButton() {
           <MoonIcon className="h-4 w-4" />
         )}
       </span>
+      <ActionTooltipLabel>{current.title}</ActionTooltipLabel>
     </button>
   );
 }

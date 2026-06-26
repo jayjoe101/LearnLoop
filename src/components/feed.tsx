@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
 import { useLivePosting } from "@/hooks/use-live-posting";
 import { PostCard } from "@/components/post-card";
+import { ActionTooltipLabel } from "@/components/action-tooltip-label";
 import { PlusIcon, SparkIcon } from "@/components/icons";
 import { NightNowButton } from "@/components/night-now-button";
 import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
@@ -85,10 +86,9 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
                 <button
                   type="button"
                   onClick={toggleLive}
-                  title="Live posting"
                   aria-label={liveOn ? "Turn off live posting" : "Turn on live posting"}
                   aria-pressed={liveOn}
-                  className={`toolbar-icon-btn toolbar-live-btn ${
+                  className={`action-tooltip action-tooltip--below toolbar-icon-btn toolbar-live-btn ${
                     liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
                   }`}
                 >
@@ -99,11 +99,13 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
                       }`}
                     />
                   </span>
+                  <ActionTooltipLabel>
+                    {liveOn ? "Stop live posting" : "Live posting"}
+                  </ActionTooltipLabel>
                 </button>
               )}
               <button
                 type="button"
-                title="New insight"
                 aria-label="Generate new insight"
                 disabled={isGeneratingInsight}
                 onClick={() =>
@@ -111,13 +113,14 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
                     await generateNewPost();
                   })
                 }
-                className={`toolbar-icon-btn toolbar-insight-btn ${
+                className={`action-tooltip action-tooltip--below toolbar-icon-btn toolbar-insight-btn ${
                   isGeneratingInsight ? "toolbar-insight-btn--generating" : ""
                 }`}
               >
                 <span className="toolbar-icon-glyph toolbar-insight-icon" aria-hidden>
                   <SparkIcon className="h-4 w-4" />
                 </span>
+                <ActionTooltipLabel>New insight</ActionTooltipLabel>
               </button>
               <NightNowButton />
             </div>

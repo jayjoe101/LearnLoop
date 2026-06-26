@@ -18,6 +18,13 @@
   --color-fill-sage: color-mix(in srgb, var(--color-coffee-sage) 12%, transparent);
   --color-fill-sage-border: color-mix(in srgb, var(--color-coffee-sage) 35%, transparent);
   --color-fill-caramel-soft: color-mix(in srgb, var(--color-coffee-caramel) 24%, transparent);
+  --gradient-tooltip: linear-gradient(
+    180deg,
+    var(--color-coffee-surface) 0%,
+    var(--color-coffee-elevated) 100%
+  );
+  --shadow-tooltip: 0 1px 0 var(--color-highlight-inset) inset,
+    0 4px 14px var(--color-shadow-ink-mid);
   --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 28%, transparent);
   --color-accent-on-fill: var(--color-coffee-text);
   --gradient-btn-primary: linear-gradient(
@@ -154,6 +161,13 @@
   --color-fill-sage: color-mix(in srgb, var(--color-coffee-sage) 10%, transparent);
   --color-fill-sage-border: color-mix(in srgb, var(--color-coffee-sage) 35%, transparent);
   --color-fill-caramel-soft: color-mix(in srgb, var(--color-coffee-honey) 20%, transparent);
+  --gradient-tooltip: linear-gradient(
+    180deg,
+    var(--color-coffee-elevated) 0%,
+    var(--color-coffee-surface) 100%
+  );
+  --shadow-tooltip: 0 1px 0 var(--color-highlight-inset) inset,
+    0 6px 18px var(--color-shadow-ink);
   --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 22%, transparent);
   --color-accent-on-fill: var(--color-coffee-text);
   --gradient-btn-primary: linear-gradient(
