@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { SelectionChrome } from "@/components/selection-chrome";
 import "./globals.css";
 
 const geist = Geist({
@@ -26,6 +27,7 @@ export default function RootLayout({
             __html: `(() => { try { const s = localStorage.getItem('theme'); const r = document.documentElement; if (s === 'dark') r.classList.add('dark'); else r.classList.remove('dark'); } catch(e){} })();`,
           }}
         />
+        <SelectionChrome />
         {children}
       </body>
     </html>

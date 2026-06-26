@@ -74,6 +74,12 @@ body {
   color: var(--color-coffee-text);
 }
 
+html.selection-highlight-active ::selection,
+html.selection-highlight-active *::selection {
+  background: transparent;
+  color: inherit;
+}
+
 button:not(:disabled),
 [role="button"]:not([aria-disabled="true"]),
 .btn-tactile,
@@ -840,13 +846,7 @@ button:disabled {
   position: relative;
 }
 
-.post-text-selection--active .post-prose ::selection,
-.post-text-selection--active .post-prose *::selection {
-  background: transparent;
-  color: inherit;
-}
-
-.post-selection-highlight-layer {
+.selection-highlight-layer {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -854,7 +854,7 @@ button:disabled {
   overflow: visible;
 }
 
-.post-selection-highlight {
+.selection-highlight {
   position: fixed;
   border-radius: 2px;
   background: var(--color-selection-bg-strong);
