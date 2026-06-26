@@ -49,6 +49,9 @@ export type Profile = {
   onboarding_completed: boolean;
 };
 
+export const MIN_ONBOARDING_TOPICS = 1;
+export const MAX_ONBOARDING_TOPICS = 8;
+
 /** Quick-pick interest areas for onboarding — same as typing them manually. */
 export const ONBOARDING_TOPICS = [
   "Computer Science",

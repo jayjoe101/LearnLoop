@@ -21,14 +21,13 @@ import type { LiveSessionContext } from "@/lib/live-posting";
 import { discoverConcreteSubject } from "@/lib/subject-discovery";
 import {
   type FeedStyle,
+  MAX_ONBOARDING_TOPICS,
+  MIN_ONBOARDING_TOPICS,
   type Post,
   type PostInteraction,
   type Profile,
   type Topic,
 } from "@/lib/types";
-
-const MIN_ONBOARDING_TOPICS = 3;
-const MAX_ONBOARDING_TOPICS = 8;
 const MAX_DEDUP_RETRIES = 2;
 
 async function requireUser() {
