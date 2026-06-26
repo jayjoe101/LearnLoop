@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { PostTextSelection } from "@/components/post-text-selection";
 import {
   enrichBodyBlocks,
   parseBodyBlocks,
@@ -236,6 +237,7 @@ export function PostBody({
   let paragraphIndex = 0;
 
   return (
+    <PostTextSelection>
     <div className="post-prose">
       {blocks.map((block, index) => {
         const node = renderBlock(
@@ -271,6 +273,7 @@ export function PostBody({
         </div>
       )}
     </div>
+    </PostTextSelection>
   );
 }
 
