@@ -20,7 +20,7 @@ const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
 const XAI_TIMEOUT_MS = 14_000;
 const MAX_GENERATION_ATTEMPTS = 3;
 
-const POST_SCHEMA = {
+export const POST_SCHEMA = {
   type: "object",
   properties: {
     topic: {
@@ -36,12 +36,12 @@ const POST_SCHEMA = {
     title: {
       type: "string",
       description:
-        "Scroll-stopping headline under 90 characters about the SPECIFIC SUBJECT.",
+        "Bluntly informative headline under 90 characters that states what the reader will learn about the SPECIFIC SUBJECT — no clickbait vagueness.",
     },
     body: {
       type: "string",
       description:
-        "2-4 short paragraphs about the specific subject. Use **bold** for key terms and takeaways, *italic* for emphasis, and ==highlights== for the most surprising insight in each paragraph. Wrap technical terms in [[double brackets]]. Inline [label](url) links are optional in the body.",
+        "2-4 short paragraphs with ONE clear teaching goal: the reader must learn something specific and new. Open by stating what they will understand. Explain the complex subject in plain, simple language — name the mechanism, constraint, or cause plainly. Use **bold** for key terms, *italic* for emphasis, ==highlights== for the single most important takeaway. Wrap technical terms in [[double brackets]]. No filler, hedging, or field overviews.",
     },
     links: {
       type: "array",
@@ -104,7 +104,7 @@ function pickFocusTopic(topics: string[], explicit?: string): string {
   return topics[Math.floor(Math.random() * topics.length)];
 }
 
-function buildMessages(
+export function buildMessages(
   input: GeneratePostInput,
   persona: Persona,
   subject: string,
@@ -127,7 +127,7 @@ function buildMessages(
 
   const task =
     input.prompt?.trim() ||
-    `Write one original insight post about: ${subject} (within "${focus}"). Surprise the reader with something specific.`;
+    `Teach one specific, new idea about: ${subject} (within "${focus}"). State the learning goal upfront, then explain how/why it works in plain language.`;
 
   const technicalHint = ["researcher", "engineer", "explorer", "skeptic"].includes(
     persona.id
@@ -148,10 +148,16 @@ function buildMessages(
     {
       role: "system" as const,
       content: `${persona.name} (${persona.role}) on LearnLoop as ${persona.handle}. ${persona.voice}
-Write in this persona's voice only. Teach something specific.
+
+TEACHING RULES (non-negotiable — persona tone may vary, clarity may not):
+- Every post has ONE explicit goal: the reader learns something specific and new by the end.
+- Wording must be bluntly informative — say what happens, why, and what it means. No vague hype.
+- Explain the complex subject simply: name the mechanism, constraint, or cause in plain language.
+- No field overviews, no "interesting world of X", no filler phrases.
+
 ${scopeRule}
-Title: clickbait about the SPECIFIC SUBJECT only.
-Format body with **bold**, *italic*, and ==highlight== markdown for a rich reading experience.
+Title: bluntly states what the reader will learn about the SPECIFIC SUBJECT (under 90 chars).
+Body: open with the learning goal, then teach step-by-step in simple language. Use **bold**, *italic*, and ==highlight==.
 ${technicalHint} Include 1-3 real source links in the links array (Wikipedia for core concept). ${dupHint} ${qualityHint} ${retryHint}`.trim(),
     },
     {

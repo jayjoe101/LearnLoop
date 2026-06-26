@@ -93,29 +93,86 @@ function capitalizeSubject(subject: string): string {
   return subject.charAt(0).toUpperCase() + subject.slice(1);
 }
 
-const TITLE_BUILDERS = [
-  (hook: string) => `Why ${hook} is wilder than it sounds`,
-  (hook: string) => `${hook}: the part everyone hand-waves`,
-  (hook: string) => `Wait — ${hook} actually works like this`,
-  (hook: string) => `The ${hook} detail that changes the whole picture`,
-  (hook: string) => `${hook} explained without the fluff`,
-  (hook: string) => `Nobody tells you this about ${hook}`,
-];
+function subjectSeed(subject: string, variant: number): number {
+  let h = variant >>> 0;
+  for (let i = 0; i < subject.length; i++) {
+    h = (Math.imul(31, h) + subject.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
 
-const BODY_BUILDERS = [
-  (wiki: string, subject: string) =>
-    `**[[${wiki}]]** is one of those ideas that sounds simple until you trace it step by step.\n\n${capitalizeSubject(subject)}. The catch: ==the naive story hides the constraint that actually drives the outcome==.`,
-  (wiki: string, subject: string) =>
-    `Here's the angle textbooks rush past on **[[${wiki}]]**.\n\n${capitalizeSubject(subject)}. Once you see the mechanism, ==a bunch of "weird" results suddenly look inevitable==.`,
-  (wiki: string, subject: string) =>
-    `**[[${wiki}]]** shows up in more places than you'd expect — and *not* as a buzzword.\n\n${capitalizeSubject(subject)}. The interesting bit is ==what breaks when you push the system slightly out of spec==.`,
-  (wiki: string, subject: string) =>
-    `Most explanations of **[[${wiki}]]** stop right before it gets good.\n\n${capitalizeSubject(subject)}. The version worth knowing ==names the tradeoff explicitly== instead of waving at intuition.`,
-  (wiki: string, subject: string) =>
-    `If **[[${wiki}]]** feels fuzzy, you're not alone — the clean diagram is a lie of omission.\n\n${capitalizeSubject(subject)}. Follow the chain of cause and effect and ==the whole thing snaps into focus==.`,
-  (wiki: string, subject: string) =>
-    `**[[${wiki}]]** has a reputation problem: people treat it like trivia instead of a tool.\n\n${capitalizeSubject(subject)}. The practical takeaway is ==smaller than a lecture but more useful than an overview==.`,
-];
+function subjectTokens(subject: string): string[] {
+  return subject
+    .replace(/\?$/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((w) => w.length > 3);
+}
+
+function buildDynamicTitle(subject: string, variant: number): string {
+  const seed = subjectSeed(subject, variant);
+  const hook = extractHook(subject);
+  const tokens = subjectTokens(subject);
+  const anchor = tokens[seed % Math.max(tokens.length, 1)] ?? hook.split(" ")[0] ?? "this";
+  const openers = ["Learn", "Understand", "Know", "See"];
+  const opener = openers[seed % openers.length];
+  const focus =
+    hook.length > 48 ? hook.split(/\s+/).slice(0, 4).join(" ") : hook;
+
+  if (seed % 5 === 0) {
+    return `${opener} how ${focus} works — in plain language`.slice(0, 90);
+  }
+  if (seed % 5 === 1) {
+    return `${capitalizeSubject(focus)}: what "${anchor}" actually means`.slice(0, 90);
+  }
+  if (seed % 5 === 2) {
+    return `The ${anchor} idea behind ${focus}`.slice(0, 90);
+  }
+  if (seed % 5 === 3) {
+    return `${opener} ${focus} without the jargon`.slice(0, 90);
+  }
+  return `${capitalizeSubject(focus)} explained simply`.slice(0, 90);
+}
+
+function deriveInsightHighlight(subject: string, seed: number): string {
+  const tokens = subjectTokens(subject);
+  const anchor = tokens[(seed >> 3) % Math.max(tokens.length, 1)] ?? "the core step";
+  const verbs = ["drives", "limits", "explains", "changes"];
+  const verb = verbs[(seed >> 5) % verbs.length];
+  return `==${capitalizeSubject(anchor)} ${verb} the outcome — that is the part summaries skip==`;
+}
+
+function buildDynamicBody(
+  wiki: string,
+  subject: string,
+  variant: number,
+  persona: Persona
+): string {
+  const seed = subjectSeed(subject, variant + 17);
+  const clean = capitalizeSubject(subject.replace(/\?$/g, "").trim());
+  const wikiLinked = `**[[${wiki}]]**`;
+  const tokens = subjectTokens(subject);
+  const mechanismWord = tokens[(seed >> 2) % Math.max(tokens.length, 1)] ?? wiki.split(" ")[0];
+  const insight = deriveInsightHighlight(subject, seed);
+
+  const goal =
+    seed % 2 === 0
+      ? `You'll learn how ${clean} works and what to take away from it.`
+      : `This post teaches one concrete idea: ${clean}.`;
+
+  const mechanism = `${wikiLinked} is the anchor. Stated plainly: ${clean}. The process hinges on **${mechanismWord}** — not on a vague overview of the field.`;
+
+  const plainExplain =
+    seed % 3 === 0
+      ? `Because ${mechanismWord} sets the constraint, the result follows directly once you name that step.`
+      : seed % 3 === 1
+        ? `The reason is mechanical: when ${mechanismWord} shifts, the downstream effect changes predictably.`
+        : `In simple terms: track ${mechanismWord} first, then the rest of the story stops sounding mysterious.`;
+
+  const takeaway = `*Takeaway (${persona.role}):* ${insight.replace(/==/g, "")}`;
+
+  return `${goal}\n\n${mechanism}\n\n${plainExplain}\n\n${insight}\n\n${takeaway}`;
+}
 
 export async function buildVariedFallbackPost(
   input: FallbackPostInput,
@@ -132,18 +189,16 @@ export async function buildVariedFallbackPost(
       avoidSubjects: input.avoidSubjects,
     }));
   const wikiTerm = extractPrimaryWikiTerm(subject);
-  const hook = extractHook(subject);
   const recentTitles = input.recentTitles ?? [];
 
-  let title = TITLE_BUILDERS[variant % TITLE_BUILDERS.length](hook);
+  let title = buildDynamicTitle(subject, variant);
   let tries = 0;
-  while (isTooSimilar(title, recentTitles) && tries < 6) {
-    const v = variant + tries + 1;
-    title = TITLE_BUILDERS[v % TITLE_BUILDERS.length](hook);
+  while (isTooSimilar(title, recentTitles) && tries < 8) {
+    title = buildDynamicTitle(subject, variant + tries + 1);
     tries++;
   }
 
-  const body = BODY_BUILDERS[variant % BODY_BUILDERS.length](wikiTerm, subject);
+  const body = buildDynamicBody(wikiTerm, subject, variant, persona);
   const wiki_terms = [{ term: wikiTerm }];
 
   return {

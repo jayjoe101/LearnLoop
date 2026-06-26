@@ -62,7 +62,6 @@ export function appendFingerprint(
 const BOILERPLATE_MARKERS = [
   "most people overlook how",
   "once you see it, you can't unsee it",
-  "here's the mechanism:",
   "worth a minute before you scroll on",
   "the weird truth about how",
   "one of those ideas that sounds simple",
@@ -76,6 +75,9 @@ const BOILERPLATE_MARKERS = [
   "actually works like this",
   "explained without the fluff",
   "nobody tells you this about",
+  "interesting world of",
+  "something cool about",
+  "fascinating field of",
 ];
 
 /** Detect templated fallback posts that only swap the subject name. */

@@ -18,7 +18,47 @@ const LOCAL_CHECKS = [
     !/\*\*[^*]+\*\*|==[^=]+==/.test(body)
       ? "Missing markdown emphasis (**bold** or ==highlight==)"
       : null,
+  (title: string, body: string) => checkTeachingClarity(title, body),
 ];
+
+const VAGUE_MARKERS = [
+  "something cool",
+  "interesting bit",
+  "worth knowing",
+  "surprise the reader",
+  "feels fuzzy",
+  "reputation problem",
+  "sounds simple until",
+  "stop right before it gets good",
+  "wilder than it sounds",
+  "hand-waves",
+];
+
+export function checkTeachingClarity(title: string, body: string): string | null {
+  const lower = `${title} ${body}`.toLowerCase();
+  const vagueHits = VAGUE_MARKERS.filter((m) => lower.includes(m)).length;
+  if (vagueHits >= 1) {
+    return "Wording is too vague — state a blunt, specific teaching goal";
+  }
+
+  const hasLearningGoal =
+    /\b(you('ll| will) (learn|understand|know|see)|this post teaches|takeaway|learning goal|by the end)\b/i.test(
+      body
+    );
+  if (!hasLearningGoal) {
+    return "Missing explicit learning goal — say what the reader will understand";
+  }
+
+  const hasPlainExplanation =
+    /\b(because|means|works by|happens when|the reason|mechanism|constraint|tradeoff|hinges on|stated plainly|in simple terms)\b/i.test(
+      lower
+    );
+  if (!hasPlainExplanation) {
+    return "Missing plain explanation of how or why — teach the mechanism simply";
+  }
+
+  return null;
+}
 
 export function runLocalQualityChecks(
   title: string,
@@ -71,7 +111,7 @@ export async function validatePostWithModel(options: {
       {
         role: "system",
         content:
-          "You are a strict feed quality reviewer. Reject meta overviews, vague fluff, and off-topic posts. Approve specific, insightful teaching posts.",
+          "You are a strict feed quality reviewer. Reject meta overviews, vague fluff, hedging, and posts that do not teach one specific new idea in plain language. Approve only posts with a clear learning goal and a simple explanation of a complex subject.",
       },
       {
         role: "user",
@@ -83,7 +123,7 @@ Title: ${options.title}
 Body:
 ${options.body.slice(0, 1200)}
 
-Does this post teach something specific about the subject (not a field overview)?
+Does this post (1) state a clear teaching goal, (2) use bluntly informative wording, and (3) explain the subject simply so the reader learns something specific?
 Return JSON: { "pass": true/false, "issues": ["..."] }`,
       },
     ],
