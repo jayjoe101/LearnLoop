@@ -7,8 +7,8 @@ import {
   likePost,
   markNotInterested,
 } from "@/lib/actions";
-import { ActionTooltipLabel } from "@/components/action-tooltip-label";
 import { EyeOffIcon, HeartIcon } from "@/components/icons";
+import { useActionTooltip } from "@/hooks/use-action-tooltip";
 import { PostAuthor } from "@/components/post-author";
 import { PostBody } from "@/components/post-body";
 import { resolvePostAuthor } from "@/lib/post-author";
@@ -28,6 +28,14 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
   const [imageUrl, setImageUrl] = useState(post.image_url);
   const [imageSettled, setImageSettled] = useState(!!post.image_url);
   const [likedPulse, setLikedPulse] = useState(false);
+  const likeTooltip = useActionTooltip({
+    label: interaction?.liked ? "Liked" : "Like",
+    placement: "above",
+  });
+  const hideTooltip = useActionTooltip({
+    label: "Hide post",
+    placement: "above",
+  });
   const author = resolvePostAuthor(post);
 
   const slotOpen = !!imageUrl || !imageSettled;
@@ -133,44 +141,52 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
       </div>
 
       <div className="post-actions">
-        <button
-          type="button"
-          disabled={isPending || interaction?.liked}
-          onClick={handleLike}
-          aria-label={interaction?.liked ? "Liked" : "Like post"}
-          className={`btn-tactile post-action-btn post-action-btn--like action-tooltip action-tooltip--above ${
-            interaction?.liked ? "post-action-btn-active" : ""
-          }`}
-        >
-          <HeartIcon
-            className={`h-4 w-4 ${
-              likedPulse ? "animate-heart-pop" : ""
-            } ${
-              interaction?.liked
-                ? "fill-[var(--color-coffee-caramel)] text-[var(--color-coffee-caramel)]"
-                : ""
+        <>
+          <button
+            ref={likeTooltip.anchorRef}
+            type="button"
+            disabled={isPending || interaction?.liked}
+            onClick={handleLike}
+            aria-label={interaction?.liked ? "Liked" : "Like post"}
+            aria-describedby={likeTooltip.describedBy}
+            {...likeTooltip.handlers}
+            className={`btn-tactile post-action-btn post-action-btn--like ${
+              interaction?.liked ? "post-action-btn-active" : ""
             }`}
-          />
-          <span>{post.likes_count}</span>
-          <ActionTooltipLabel>
-            {interaction?.liked ? "Liked" : "Like"}
-          </ActionTooltipLabel>
-        </button>
+          >
+            <HeartIcon
+              className={`h-4 w-4 ${
+                likedPulse ? "animate-heart-pop" : ""
+              } ${
+                interaction?.liked
+                  ? "fill-[var(--color-coffee-caramel)] text-[var(--color-coffee-caramel)]"
+                  : ""
+              }`}
+            />
+            <span>{post.likes_count}</span>
+          </button>
+          {likeTooltip.tooltipPortal}
+        </>
 
-        <button
-          type="button"
-          disabled={isPending}
-          aria-label="Hide post"
-          onClick={() =>
-            startTransition(async () => {
-              await markNotInterested(post.id);
-            })
-          }
-          className="btn-tactile post-action-btn post-action-btn--hide action-tooltip action-tooltip--above ml-auto"
-        >
-          <EyeOffIcon className="h-4 w-4" />
-          <ActionTooltipLabel>Hide post</ActionTooltipLabel>
-        </button>
+        <>
+          <button
+            ref={hideTooltip.anchorRef}
+            type="button"
+            disabled={isPending}
+            aria-label="Hide post"
+            aria-describedby={hideTooltip.describedBy}
+            {...hideTooltip.handlers}
+            onClick={() =>
+              startTransition(async () => {
+                await markNotInterested(post.id);
+              })
+            }
+            className="btn-tactile post-action-btn post-action-btn--hide ml-auto"
+          >
+            <EyeOffIcon className="h-4 w-4" />
+          </button>
+          {hideTooltip.tooltipPortal}
+        </>
       </div>
     </article>
   );

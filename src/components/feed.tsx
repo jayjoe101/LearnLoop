@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
 import { useLivePosting } from "@/hooks/use-live-posting";
 import { PostCard } from "@/components/post-card";
-import { ActionTooltipLabel } from "@/components/action-tooltip-label";
 import { PlusIcon, SparkIcon } from "@/components/icons";
+import { useActionTooltip } from "@/hooks/use-action-tooltip";
 import { NightNowButton } from "@/components/night-now-button";
 import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
 
@@ -32,6 +32,15 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
     pendingCount,
     loadPending,
   } = useLivePosting(posts);
+
+  const liveTooltip = useActionTooltip({
+    label: liveOn ? "Stop live posting" : "Live posting",
+    placement: "below",
+  });
+  const insightTooltip = useActionTooltip({
+    label: "New insight",
+    placement: "below",
+  });
 
   const visiblePosts =
     filter === "liked"
@@ -83,45 +92,53 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
 
             <div className="toolbar-icon-group">
               {filter === "all" && (
+                <>
+                  <button
+                    ref={liveTooltip.anchorRef}
+                    type="button"
+                    onClick={toggleLive}
+                    aria-label={liveOn ? "Turn off live posting" : "Turn on live posting"}
+                    aria-describedby={liveTooltip.describedBy}
+                    aria-pressed={liveOn}
+                    {...liveTooltip.handlers}
+                    className={`toolbar-icon-btn toolbar-live-btn ${
+                      liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
+                    }`}
+                  >
+                    <span className="toolbar-icon-glyph" aria-hidden>
+                      <span
+                        className={`toolbar-live-dot ${
+                          liveOn ? "toolbar-live-dot-active" : ""
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  {liveTooltip.tooltipPortal}
+                </>
+              )}
+              <>
                 <button
+                  ref={insightTooltip.anchorRef}
                   type="button"
-                  onClick={toggleLive}
-                  aria-label={liveOn ? "Turn off live posting" : "Turn on live posting"}
-                  aria-pressed={liveOn}
-                  className={`action-tooltip action-tooltip--below toolbar-icon-btn toolbar-live-btn ${
-                    liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
+                  aria-label="Generate new insight"
+                  aria-describedby={insightTooltip.describedBy}
+                  disabled={isGeneratingInsight}
+                  {...insightTooltip.handlers}
+                  onClick={() =>
+                    startGenerateInsight(async () => {
+                      await generateNewPost();
+                    })
+                  }
+                  className={`toolbar-icon-btn toolbar-insight-btn ${
+                    isGeneratingInsight ? "toolbar-insight-btn--generating" : ""
                   }`}
                 >
-                  <span className="toolbar-icon-glyph" aria-hidden>
-                    <span
-                      className={`toolbar-live-dot ${
-                        liveOn ? "toolbar-live-dot-active" : ""
-                      }`}
-                    />
+                  <span className="toolbar-icon-glyph toolbar-insight-icon" aria-hidden>
+                    <SparkIcon className="h-4 w-4" />
                   </span>
-                  <ActionTooltipLabel>
-                    {liveOn ? "Stop live posting" : "Live posting"}
-                  </ActionTooltipLabel>
                 </button>
-              )}
-              <button
-                type="button"
-                aria-label="Generate new insight"
-                disabled={isGeneratingInsight}
-                onClick={() =>
-                  startGenerateInsight(async () => {
-                    await generateNewPost();
-                  })
-                }
-                className={`action-tooltip action-tooltip--below toolbar-icon-btn toolbar-insight-btn ${
-                  isGeneratingInsight ? "toolbar-insight-btn--generating" : ""
-                }`}
-              >
-                <span className="toolbar-icon-glyph toolbar-insight-icon" aria-hidden>
-                  <SparkIcon className="h-4 w-4" />
-                </span>
-                <ActionTooltipLabel>New insight</ActionTooltipLabel>
-              </button>
+                {insightTooltip.tooltipPortal}
+              </>
               <NightNowButton />
             </div>
           </div>

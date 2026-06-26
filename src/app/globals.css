@@ -416,38 +416,30 @@ button:disabled {
   overflow: visible;
 }
 
-/* Animated custom tooltips for premium action buttons */
+/* Portaled animated tooltips — escape overflow scroll containers */
 @keyframes action-tooltip-in-below {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-6px) scale(0.86);
+    transform: translate(-50%, -6px) scale(0.86);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translate(-50%, 0) scale(1);
   }
 }
 
 @keyframes action-tooltip-in-above {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(6px) scale(0.86);
+    transform: translate(-50%, calc(-100% + 6px)) scale(0.86);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translate(-50%, -100%) scale(1);
   }
 }
 
-.action-tooltip {
-  position: relative;
-  overflow: visible;
-}
-
 .action-tooltip__label {
-  position: absolute;
-  left: 50%;
-  z-index: 40;
   pointer-events: none;
   white-space: nowrap;
   padding: 0.32rem 0.58rem;
@@ -455,43 +447,33 @@ button:disabled {
   font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  text-transform: none;
   color: var(--color-coffee-text);
   background: var(--gradient-tooltip);
   border: 1px solid var(--color-border-subtle);
   box-shadow: var(--shadow-tooltip);
-  opacity: 0;
-  visibility: hidden;
 }
 
-.action-tooltip--below .action-tooltip__label {
-  top: calc(100% + 0.5rem);
-  transform: translateX(-50%) translateY(-4px) scale(0.88);
+.action-tooltip__label--portal {
+  position: fixed;
+  z-index: 100;
 }
 
-.action-tooltip--above .action-tooltip__label {
-  bottom: calc(100% + 0.5rem);
-  transform: translateX(-50%) translateY(4px) scale(0.88);
-}
-
-.action-tooltip:hover .action-tooltip__label,
-.action-tooltip:focus-visible .action-tooltip__label {
-  visibility: visible;
-}
-
-.action-tooltip--below:hover .action-tooltip__label,
-.action-tooltip--below:focus-visible .action-tooltip__label {
+.action-tooltip__label--portal.action-tooltip__label--below {
   animation: action-tooltip-in-below 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-.action-tooltip--above:hover .action-tooltip__label,
-.action-tooltip--above:focus-visible .action-tooltip__label {
+.action-tooltip__label--portal.action-tooltip__label--above {
   animation: action-tooltip-in-above 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .dark .action-tooltip__label {
   color: var(--color-coffee-cream);
   border-color: var(--color-border-mid);
+}
+
+.post-card,
+.post-actions {
+  overflow: visible;
 }
 
 .toolbar-icon-group {
