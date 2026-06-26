@@ -10,7 +10,9 @@
     "env:pull": "vercel env pull .env.local --yes",
     "verify": "node scripts/verify-integrations.mjs",
     "test:theme": "node --test scripts/verify-theme.test.mjs",
-    "test:premium-buttons": "node --test scripts/verify-premium-buttons.test.mjs"
+    "test:premium-buttons": "node --test scripts/verify-premium-buttons.test.mjs",
+    "test:generation": "node --import tsx --test scripts/verify-generation.test.mjs",
+    "verify:generation-primary": "node --import tsx scripts/verify-generation-primary.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
@@ -28,6 +30,7 @@
     "eslint": "^9.27.0",
     "eslint-config-next": "^15.3.3",
     "tailwindcss": "^4.1.8",
+    "tsx": "^4.22.4",
     "typescript": "^5.8.3"
   }
 }

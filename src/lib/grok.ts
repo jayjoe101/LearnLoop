@@ -25,10 +25,22 @@ import {
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 14_000;
-const MAX_GENERATION_ATTEMPTS = 3;
+const XAI_TIMEOUT_MS = 12_000;
+const MAX_GENERATION_ATTEMPTS = 2;
 
-const POST_SCHEMA = {
+export type GenerationPath = "primary" | "fallback";
+
+let lastGenerationPath: GenerationPath | null = null;
+
+export function peekLastGenerationPath(): GenerationPath | null {
+  return lastGenerationPath;
+}
+
+export function resetGenerationPath(): void {
+  lastGenerationPath = null;
+}
+
+export const POST_SCHEMA = {
   type: "object",
   properties: {
     topic: {
@@ -112,7 +124,7 @@ function pickFocusTopic(topics: string[], explicit?: string): string {
   return topics[Math.floor(Math.random() * topics.length)];
 }
 
-function buildMessages(
+export function buildMessages(
   input: GeneratePostInput,
   persona: Persona,
   subject: string,
@@ -296,16 +308,14 @@ async function resolveSubject(
   const explicit = input.concreteSubject?.trim();
   if (explicit && !isPlaceholderSubject(explicit, focus)) return explicit;
 
-  for (let i = 0; i < 2; i++) {
-    const discovered = await discoverConcreteSubject({
-      topic: focus,
-      subjectIndex: (input.subjectIndex ?? Date.now()) + attempt + i * 11,
-      recentTitles: input.recentTitles,
-      usedSubjects: input.usedSubjects,
-      avoidSubjects: input.avoidSubjects,
-    });
-    if (discovered && !isPlaceholderSubject(discovered, focus)) return discovered;
-  }
+  const discovered = await discoverConcreteSubject({
+    topic: focus,
+    subjectIndex: (input.subjectIndex ?? Date.now()) + attempt,
+    recentTitles: input.recentTitles,
+    usedSubjects: input.usedSubjects,
+    avoidSubjects: input.avoidSubjects,
+  });
+  if (discovered && !isPlaceholderSubject(discovered, focus)) return discovered;
 
   const wikiSubject = await discoverWikipediaSubject(
     focus,
@@ -347,19 +357,20 @@ async function acceptGeneratedPost(
   return { accepted: draft };
 }
 
-const MAX_FALLBACK_ITERATIONS = 4;
+const MAX_FALLBACK_ITERATIONS = 3;
 
 export async function generatePost(
   input: GeneratePostInput,
   attempt = 0
 ): Promise<GeneratedPost | null> {
+  resetGenerationPath();
+
   const apiKey = process.env.XAI_API_KEY;
   const recentTitles = input.recentTitles ?? [];
   const recentFingerprints = input.recentFingerprints ?? [];
   const variant = (input.subjectIndex ?? 0) + attempt;
   const focus = pickFocusTopic(input.topics, input.focusTopic);
   const subject = await resolveSubject(input, focus, attempt);
-  const wikiPrefetch = resolveSubjectWikipediaCandidates(subject).catch(() => []);
 
   const baseInput: GeneratePostInput = {
     ...input,
@@ -388,15 +399,16 @@ export async function generatePost(
         recentTitles,
         recentFingerprints
       );
-      if (accepted) return accepted;
+      if (accepted) {
+        lastGenerationPath = "primary";
+        return accepted;
+      }
 
       if (quality?.issues.length) {
         qualityFeedback = quality.issues.join("; ");
       }
     }
   }
-
-  await wikiPrefetch;
 
   const triedSubjects = new Set<string>();
 
@@ -410,8 +422,14 @@ export async function generatePost(
     if (triedSubjects.has(subjectKey)) return null;
     triedSubjects.add(subjectKey);
 
-    if (fbIndex > 0) {
-      await resolveSubjectWikipediaCandidates(trySubject).catch(() => []);
+    let wikiCandidates = await resolveSubjectWikipediaCandidates(trySubject).catch(
+      () => []
+    );
+    if (wikiCandidates.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      wikiCandidates = await resolveSubjectWikipediaCandidates(trySubject).catch(
+        () => []
+      );
     }
 
     if (apiKey) {
@@ -430,29 +448,41 @@ export async function generatePost(
           recentTitles,
           recentFingerprints
         );
-        if (accepted) return accepted;
+        if (accepted) {
+          lastGenerationPath = "fallback";
+          return accepted;
+        }
       }
     }
 
-    const fallback = await buildVariedFallbackPost(
-      {
-        topics: input.topics,
-        focusTopic: focus,
-        concreteSubject: trySubject,
-        subjectIndex: input.subjectIndex,
-        recentTitles,
-        avoidSubjects: input.avoidSubjects,
-      },
-      pickRandomPersona(),
-      variant + fbIndex
-    );
+    if (wikiCandidates.length === 0) return null;
 
-    const { accepted } = await acceptGeneratedPost(
-      fallback,
-      recentTitles,
-      recentFingerprints
-    );
-    return accepted;
+    for (let variantTry = 0; variantTry < 3; variantTry++) {
+      const fallback = await buildVariedFallbackPost(
+        {
+          topics: input.topics,
+          focusTopic: focus,
+          concreteSubject: trySubject,
+          subjectIndex: (input.subjectIndex ?? 0) + variantTry * 9,
+          recentTitles,
+          avoidSubjects: input.avoidSubjects,
+        },
+        pickRandomPersona(),
+        variant + fbIndex + variantTry * 5
+      );
+
+      const { accepted } = await acceptGeneratedPost(
+        fallback,
+        recentTitles,
+        recentFingerprints
+      );
+      if (accepted) {
+        lastGenerationPath = "fallback";
+        return accepted;
+      }
+    }
+
+    return null;
   };
 
   const avoidForDiscovery = () => [
@@ -473,10 +503,13 @@ export async function generatePost(
           });
 
     const accepted = await tryGenerateForSubject(trySubject ?? "", fb);
-    if (accepted) return accepted;
+    if (accepted) {
+      lastGenerationPath = "fallback";
+      return accepted;
+    }
   }
 
-  for (let w = 0; w < 3; w++) {
+  for (let w = 0; w < 2; w++) {
     const wikiSubject = await discoverWikipediaSubject(
       focus,
       variant + 200 + w * 31,
@@ -488,7 +521,10 @@ export async function generatePost(
       wikiSubject,
       MAX_FALLBACK_ITERATIONS + w
     );
-    if (accepted) return accepted;
+    if (accepted) {
+      lastGenerationPath = "fallback";
+      return accepted;
+    }
   }
 
   return null;

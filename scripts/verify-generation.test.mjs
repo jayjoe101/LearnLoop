@@ -7,37 +7,37 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = join(fileURLToPath(new URL("..", import.meta.url)));
 const SCRATCH =
   process.env.GEN_SCRATCH ??
-  "C:\\Users\\jay\\AppData\\Local\\Temp\\grok-goal-8a7bd38b0ecf\\implementer";
+  "C:\\Users\\jay\\AppData\\Local\\Temp\\grok-goal-a89afbf6666e\\implementer";
 
 mkdirSync(SCRATCH, { recursive: true });
 
+const srcUrl = (rel) => pathToFileURL(join(ROOT, "src", "lib", rel)).href;
+
 test("generation prompts and schema mandate teaching clarity", () => {
   const grokSrc = readFileSync(join(ROOT, "src", "lib", "grok.ts"), "utf8");
+  const actionsSrc = readFileSync(join(ROOT, "src", "lib", "actions.ts"), "utf8");
   const fallbackSrc = readFileSync(
     join(ROOT, "src", "lib", "fallback-post.ts"),
     "utf8"
   );
 
-  assert.match(grokSrc, /TEACHING RULES/);
+  assert.match(grokSrc, /TEACHING GOAL/);
   assert.match(grokSrc, /bluntly informative/i);
-  assert.match(grokSrc, /learning goal/i);
-  assert.match(grokSrc, /plain, simple language/i);
+  assert.match(grokSrc, /teaching goal/i);
   assert.match(grokSrc, /export const POST_SCHEMA/);
   assert.match(grokSrc, /export function buildMessages/);
+  assert.match(grokSrc, /lastGenerationPath = "primary"/);
+  assert.doesNotMatch(actionsSrc, /discoverConcreteSubject/);
 
   assert.doesNotMatch(fallbackSrc, /TITLE_BUILDERS/);
   assert.doesNotMatch(fallbackSrc, /BODY_BUILDERS/);
-  assert.match(fallbackSrc, /buildDynamicTitle/);
-  assert.match(fallbackSrc, /buildDynamicBody/);
+  assert.match(fallbackSrc, /buildVariedFallbackPost/);
+  assert.match(fallbackSrc, /composeTeachingAnswer/);
 });
 
 test("buildMessages output includes teaching directives", async () => {
-  const { buildMessages, POST_SCHEMA } = await import(
-    pathToFileURL(join(ROOT, "src", "lib", "grok.ts")).href
-  );
-  const { PERSONAS } = await import(
-    pathToFileURL(join(ROOT, "src", "lib", "personas.ts")).href
-  );
+  const { buildMessages, POST_SCHEMA } = await import(srcUrl("grok.ts"));
+  const { PERSONAS } = await import(srcUrl("personas.ts"));
 
   const messages = buildMessages(
     {
@@ -51,85 +51,101 @@ test("buildMessages output includes teaching directives", async () => {
   );
 
   const system = messages[0].content;
-  assert.match(system, /TEACHING RULES/);
+  assert.match(system, /TEACHING GOAL/);
   assert.match(system, /bluntly informative/i);
   assert.match(POST_SCHEMA.properties.body.description, /teaching goal/i);
-  assert.match(POST_SCHEMA.properties.title.description, /Bluntly informative/i);
+  assert.match(POST_SCHEMA.properties.title.description, /Blunt, informative/i);
 });
 
-test("generatePost twice produces dynamic teaching posts", async () => {
-  const savedKey = process.env.XAI_API_KEY;
-  delete process.env.XAI_API_KEY;
+test("generatePost returns dynamic teaching posts for pinned subjects", async () => {
+  const hasApiKey = Boolean(process.env.XAI_API_KEY);
 
-  const { generatePost } = await import(
-    pathToFileURL(join(ROOT, "src", "lib", "grok.ts")).href
-  );
-  const { isBoilerplatePost } = await import(
-    pathToFileURL(join(ROOT, "src", "lib", "dedup.ts")).href
-  );
-  const { runLocalQualityChecks } = await import(
-    pathToFileURL(join(ROOT, "src", "lib", "post-quality.ts")).href
-  );
+  const { generatePost, peekLastGenerationPath } = await import(srcUrl("grok.ts"));
+  const { isBoilerplatePost } = await import(srcUrl("dedup.ts"));
+  const { runLocalQualityChecks } = await import(srcUrl("post-quality.ts"));
 
-  try {
-    const post1 = await generatePost({
-      topics: ["Quantum Physics"],
-      style: "Balanced & insightful",
-      subjectIndex: 4101,
-      concreteSubject:
-        "How quantum tunneling lets particles cross classically forbidden energy barriers",
-    });
+  const cases = [
+    {
+      label: "mathematics",
+      input: {
+        topics: ["Mathematics"],
+        style: "Balanced & insightful",
+        focusTopic: "Mathematics",
+        subjectIndex: 5101,
+        concreteSubject:
+          "How the Euclidean algorithm finds the greatest common divisor by repeated remainder steps",
+      },
+    },
+    {
+      label: "physics",
+      input: {
+        topics: ["Physics"],
+        style: "Deep technical",
+        focusTopic: "Physics",
+        subjectIndex: 5102,
+        concreteSubject:
+          "How electromagnetic induction converts changing magnetic flux into electric voltage in a coil",
+      },
+    },
+  ];
 
-    const post2 = await generatePost({
-      topics: ["Computer Science"],
-      style: "Deep technical",
-      subjectIndex: 4102,
-      concreteSubject:
-        "Why branch predictors in CPUs speculatively execute the wrong path and how mispredictions stall pipelines",
-    });
+  const results = [];
+
+  for (const { label, input } of cases) {
+    let post = null;
+    for (let tryNum = 0; tryNum < 2 && !post; tryNum++) {
+      post = await generatePost({
+        ...input,
+        subjectIndex: input.subjectIndex + tryNum * 101,
+      });
+    }
+    const pathUsed = peekLastGenerationPath();
 
     writeFileSync(
-      join(SCRATCH, "gen-run-1.txt"),
-      JSON.stringify(post1, null, 2),
-      "utf8"
-    );
-    writeFileSync(
-      join(SCRATCH, "gen-run-2.txt"),
-      JSON.stringify(post2, null, 2),
+      join(SCRATCH, `gen-run-${label}.json`),
+      JSON.stringify({ post, pathUsed, hasApiKey }, null, 2),
       "utf8"
     );
 
-    for (const [label, post] of [
-      ["post1", post1],
-      ["post2", post2],
-    ]) {
-      assert.ok(post.title?.trim(), `${label} missing title`);
-      assert.ok(post.body?.trim(), `${label} missing body`);
-      assert.equal(isBoilerplatePost(post.title, post.body), false, label);
-      const quality = runLocalQualityChecks(
-        post.title,
-        post.body,
-        post.topic,
-        post.wiki_terms
-      );
+    assert.ok(post, `${label}: generatePost returned null`);
+    assert.ok(post.title?.trim(), `${label} missing title`);
+    assert.ok(post.body?.trim(), `${label} missing body`);
+    assert.equal(isBoilerplatePost(post.title, post.body), false, label);
+    const quality = runLocalQualityChecks(
+      post.title,
+      post.body,
+      post.topic,
+      post.wiki_terms,
+      post.subject
+    );
+    assert.equal(
+      quality.pass,
+      true,
+      `${label} quality failed: ${quality.issues.join("; ")}`
+    );
+
+    if (hasApiKey) {
       assert.equal(
-        quality.pass,
-        true,
-        `${label} quality failed: ${quality.issues.join("; ")}`
+        pathUsed,
+        "primary",
+        `${label}: expected primary LLM path when API key is set`
+      );
+    } else {
+      assert.ok(
+        pathUsed === "primary" || pathUsed === "fallback",
+        `${label}: expected a generation path`
       );
     }
 
-    assert.notEqual(post1.title, post2.title);
-    assert.notEqual(post1.body, post2.body);
-  } finally {
-    if (savedKey) process.env.XAI_API_KEY = savedKey;
+    results.push(post);
   }
+
+  assert.notEqual(results[0].title, results[1].title);
+  assert.notEqual(results[0].body, results[1].body);
 });
 
 test("runLocalQualityChecks rejects vague content twice", async () => {
-  const { runLocalQualityChecks } = await import(
-    pathToFileURL(join(ROOT, "src", "lib", "post-quality.ts")).href
-  );
+  const { runLocalQualityChecks } = await import(srcUrl("post-quality.ts"));
 
   const vague1 = runLocalQualityChecks(
     "Something cool about physics",

@@ -18,7 +18,7 @@ import { fetchValidatedPostImage } from "@/lib/image-relevance";
 import { attachPostImage } from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
-import { discoverConcreteSubject } from "@/lib/subject-discovery";
+
 import {
   type FeedStyle,
   MAX_ONBOARDING_TOPICS,
@@ -294,15 +294,6 @@ async function createUniquePost(
       pickRandomTopic(options.topicNames, options.lastTopic);
     const subjectIndex = Date.now() + options.postCount + attempt * 17;
 
-    const concreteSubject = focusTopic
-      ? (await discoverConcreteSubject({
-          topic: focusTopic,
-          subjectIndex,
-          recentTitles: titles,
-          avoidSubjects: subjects,
-        })) ?? undefined
-      : undefined;
-
     let post: GeneratedPost | null = null;
     try {
       post = await generatePost(
@@ -314,7 +305,6 @@ async function createUniquePost(
           recentFingerprints: fingerprints,
           avoidSubjects: subjects,
           focusTopic,
-          concreteSubject,
           subjectIndex,
         },
         attempt

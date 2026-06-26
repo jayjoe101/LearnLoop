@@ -4,7 +4,7 @@ import {
   isPlaceholderSubject,
 } from "@/lib/wiki-fetch";
 
-const DISCOVERY_ATTEMPTS = 3;
+const DISCOVERY_ATTEMPTS = 2;
 
 const ANGLE_HINTS = [
   "a counterintuitive mechanism most people misunderstand",
