@@ -1,20 +1,24 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  fetchValidatedPostImage,
-  type PostImageContext,
-} from "@/lib/image-relevance";
+import { fetchPostImageForSubject, type ImageContext } from "@/lib/images";
 
-/** Background image attach — permissive validation, uses request-scoped client. */
+/** Share of new posts that attempt a background image lookup. */
+export const POST_IMAGE_ATTEMPT_CHANCE = 1 / 3;
+
+export function shouldAttemptPostImage(): boolean {
+  return Math.random() < POST_IMAGE_ATTEMPT_CHANCE;
+}
+
+/** Background image attach — subject-first Wikipedia thumbnail only. */
 export function attachPostImage(
   supabase: SupabaseClient,
   postId: string,
-  ctx: PostImageContext
+  ctx: ImageContext
 ): null {
   after(async () => {
     try {
-      const image = await fetchValidatedPostImage(ctx);
+      const image = await fetchPostImageForSubject(ctx);
       if (!image) return;
 
       const { error } = await supabase

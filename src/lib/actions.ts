@@ -14,7 +14,10 @@ import {
   pickRandomTopic,
 } from "@/lib/generation-context";
 import { personaToAuthorFields } from "@/lib/post-author";
-import { attachPostImage } from "@/lib/post-images";
+import {
+  attachPostImage,
+  shouldAttemptPostImage,
+} from "@/lib/post-images";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
 
@@ -247,7 +250,9 @@ async function insertGeneratedPost(
   if (error || !inserted) return null;
 
   const postId = inserted.id as string;
-  void attachPostImage(supabase, postId, imageCtx);
+  if (shouldAttemptPostImage()) {
+    attachPostImage(supabase, postId, imageCtx);
+  }
 
   return mapRowToPost(inserted as Record<string, unknown>);
 }
