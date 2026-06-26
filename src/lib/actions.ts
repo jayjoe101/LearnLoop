@@ -27,7 +27,7 @@ import {
   type Profile,
   type Topic,
 } from "@/lib/types";
-const MAX_DEDUP_RETRIES = 2;
+const MAX_DEDUP_RETRIES = 3;
 
 async function requireUser() {
   const supabase = await createClient();

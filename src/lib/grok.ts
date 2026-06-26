@@ -6,6 +6,7 @@ import {
 import { buildVariedFallbackPost } from "@/lib/fallback-post";
 import {
   validateGeneratedPost,
+  validatePostWithModel,
   type QualityVerdict,
 } from "@/lib/post-quality";
 import { pickRandomPersona, type Persona } from "@/lib/personas";
@@ -24,8 +25,8 @@ import {
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
 const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
-const XAI_TIMEOUT_MS = 10_000;
-const MAX_PRIMARY_ATTEMPTS = 2;
+const XAI_TIMEOUT_MS = 14_000;
+const MAX_PRIMARY_ATTEMPTS = 4;
 
 const DEFERRED_SUBJECT_PREFIX = "deferred:";
 
@@ -130,6 +131,16 @@ export type GeneratedPost = {
   persona: Persona;
   subject: string;
 };
+
+function normalizeLlmParagraphs(body: string): string {
+  if (body.includes("\n\n")) return body;
+  const parts = body
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 40);
+  if (parts.length >= 2) return parts.join("\n\n");
+  return body;
+}
 
 function pickFocusTopic(topics: string[], explicit?: string): string {
   if (explicit) return explicit;
@@ -290,10 +301,21 @@ function parseGeneratedContent(
 
   if (isMetaTopicPost(title, body, topic, wiki_terms)) return null;
 
+  let enrichedBody = enrichBodyWithWikiTerms(
+    normalizeLlmParagraphs(body),
+    wiki_terms
+  );
+  if (!/\[\[[^\]]+\]\]/.test(enrichedBody)) {
+    const term = wiki_terms[0]?.term?.trim();
+    if (term) {
+      enrichedBody = `**[[${term}]]** — ${enrichedBody}`;
+    }
+  }
+
   return {
     topic,
     title,
-    body: enrichBodyWithWikiTerms(body, wiki_terms),
+    body: enrichedBody,
     links,
     wiki_terms,
     subject: resolvedSubject,
@@ -310,21 +332,35 @@ async function callXai(
   const temperature = 0.72 + attempt * 0.06;
   const messages = buildMessages(input, persona, subject, attempt);
 
-  try {
-    const response = await requestPost(apiKey, messages, temperature);
-    if (!response.ok) return null;
+  for (let apiTry = 0; apiTry < 2; apiTry++) {
+    try {
+      const response = await requestPost(apiKey, messages, temperature);
+      if (!response.ok) {
+        if (
+          apiTry === 0 &&
+          (response.status >= 500 || response.status === 429)
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        return null;
+      }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content as string | undefined;
-    if (!content) return null;
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content as string | undefined;
+      if (!content) return null;
 
-    const result = parseGeneratedContent(content, input, subject);
-    if (!result) return null;
+      const result = parseGeneratedContent(content, input, subject);
+      if (!result) return null;
 
-    return { ...result, persona };
-  } catch {
-    return null;
+      return { ...result, persona };
+    } catch {
+      if (apiTry === 0) continue;
+      return null;
+    }
   }
+
+  return null;
 }
 
 async function resolveSubject(
@@ -384,11 +420,23 @@ async function acceptGeneratedPost(
     title: draft.title,
     body: draft.body,
     wikiTerms: draft.wiki_terms,
-    skipModelReview: options?.fastPath,
+    llmPrimary: options?.fastPath,
+    skipModelReview: true,
   });
-  if (!quality.pass) return { accepted: null, quality };
+  if (quality.pass) return { accepted: draft };
 
-  return { accepted: draft };
+  if (options?.fastPath && process.env.XAI_API_KEY) {
+    const model = await validatePostWithModel({
+      topic: draft.topic,
+      subject: draft.subject,
+      title: draft.title,
+      body: draft.body,
+    });
+    if (model.pass) return { accepted: draft };
+    return { accepted: null, quality: model.issues.length ? model : quality };
+  }
+
+  return { accepted: null, quality };
 }
 
 export async function generatePost(
@@ -438,6 +486,9 @@ export async function generatePost(
 
       if (quality?.issues.length) {
         qualityFeedback = quality.issues.join("; ");
+      } else if (!draft) {
+        qualityFeedback =
+          "Return valid JSON with subject, title, body (2+ paragraphs, [[wiki]] links, **bold**, ==highlight==), links, and wiki_terms.";
       }
     }
 

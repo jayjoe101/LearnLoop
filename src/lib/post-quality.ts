@@ -2,9 +2,13 @@ import { isMetaTopicPost } from "@/lib/topic-subjects";
 import { isPlaceholderSubject } from "@/lib/wiki-fetch";
 import {
   bodyAnswersSubject,
+  extractSubjectKeywords,
   isCoherentTeachingBody,
   teachesSpecificTakeaway,
 } from "@/lib/teaching-validate";
+
+const LLM_CAUSAL =
+  /\b(because|since|after|when|if|therefore|thus|so|as a result|due to|means|works by|happens when|causes|results in|defined as|mechanism|allows|requires|prevents|produces|reduces|increases|through|via|by)\b/i;
 import { chatCompletion, FAST_MODEL, parseJsonContent } from "@/lib/xai-client";
 import type { PostWikiTerm } from "@/lib/types";
 
@@ -146,6 +150,73 @@ const LOCAL_CHECKS: LocalCheck[] = [
       : null,
 ];
 
+/** Validation for dynamic LLM posts — not the wiki-stitch paragraph shape. */
+export function runLlmPrimaryQualityChecks(
+  title: string,
+  body: string,
+  topic: string,
+  wikiTerms: PostWikiTerm[],
+  subject?: string
+): QualityVerdict {
+  const issues: string[] = [];
+  const resolvedSubject = subject ?? title;
+  const plain = body.toLowerCase();
+
+  if (body.length < 120) issues.push("Body is too short");
+  if (title.length < 12) issues.push("Title is too short");
+  if (!/\[\[[^\]]+\]\]/.test(body)) {
+    issues.push("Missing [[wiki-linked]] terms");
+  }
+  if (!/\*\*[^*]+\*\*|==[^=]+==/.test(body)) {
+    issues.push("Missing markdown emphasis (**bold** or ==highlight==)");
+  }
+
+  const combined = `${title} ${body}`.toLowerCase();
+  const vagueHits = VAGUE_PHRASES.filter((p) => combined.includes(p));
+  if (vagueHits.length > 0) {
+    issues.push(`Vague or templated phrasing: ${vagueHits.slice(0, 2).join(", ")}`);
+  }
+
+  if (!TEACHING_SIGNALS.test(body)) {
+    issues.push(
+      "Body lacks a clear teaching signal — include facts, mechanisms, or measurable detail"
+    );
+  }
+  if (!LLM_CAUSAL.test(plain)) {
+    issues.push("Body lacks a clear mechanism or causal explanation");
+  }
+
+  const paragraphs = body.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length < 2) {
+    issues.push("Body needs at least 2 paragraphs separated by blank lines");
+  }
+
+  const keywords = extractSubjectKeywords(resolvedSubject);
+  if (keywords.length > 0) {
+    const matched = keywords.filter((kw) => {
+      const variants = [kw, kw.replace(/-/g, " "), kw.replace(/-/g, "")];
+      return variants.some((v) => v.length > 3 && plain.includes(v));
+    }).length;
+    if (matched < Math.max(1, Math.ceil(keywords.length * 0.3))) {
+      issues.push("Body does not address the chosen subject closely enough");
+    }
+  }
+
+  if (isTautologicalBody(body, resolvedSubject)) {
+    issues.push("Body only restates the subject — teach a specific fact or mechanism");
+  }
+
+  if (subject && isPlaceholderSubject(subject, topic)) {
+    issues.push("Subject is a meta placeholder, not a teachable topic");
+  }
+
+  if (isMetaTopicPost(title, body, topic, wikiTerms)) {
+    issues.push("Post is a meta overview of the topic label, not a specific subject");
+  }
+
+  return { pass: issues.length === 0, issues };
+}
+
 export function runLocalQualityChecks(
   title: string,
   body: string,
@@ -247,16 +318,25 @@ export async function validateGeneratedPost(options: {
   title: string;
   body: string;
   wikiTerms: PostWikiTerm[];
-  /** Primary LLM path: strict local checks only — skips extra model review round-trip. */
+  /** Primary dynamic LLM output — skips wiki-stitch shape checks. */
+  llmPrimary?: boolean;
   skipModelReview?: boolean;
 }): Promise<QualityVerdict> {
-  const local = runLocalQualityChecks(
-    options.title,
-    options.body,
-    options.topic,
-    options.wikiTerms,
-    options.subject
-  );
+  const local = options.llmPrimary
+    ? runLlmPrimaryQualityChecks(
+        options.title,
+        options.body,
+        options.topic,
+        options.wikiTerms,
+        options.subject
+      )
+    : runLocalQualityChecks(
+        options.title,
+        options.body,
+        options.topic,
+        options.wikiTerms,
+        options.subject
+      );
 
   if (!local.pass) return local;
 
