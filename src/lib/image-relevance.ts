@@ -1,15 +1,17 @@
-import {
-  fetchPostImageForSubject,
-  type ImageContext,
-} from "@/lib/images";
+import { fetchImageCandidates, type ImageContext } from "./images";
 
 export type PostImageContext = ImageContext & {
   body?: string;
 };
 
-/** Wikipedia thumbnail for the post subject — no vision API round-trip. */
+/** Best Wikipedia thumbnail for the post — subject-led candidates, no vision gate. */
 export async function fetchValidatedPostImage(
   ctx: PostImageContext
 ): Promise<string | null> {
-  return fetchPostImageForSubject(ctx);
+  try {
+    const candidates = await fetchImageCandidates(ctx, 3);
+    return candidates[0] ?? null;
+  } catch {
+    return null;
+  }
 }

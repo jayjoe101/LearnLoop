@@ -1,7 +1,12 @@
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
-const WIKI_REQUEST_TIMEOUT_MS = 3_500;
+const WIKI_REQUEST_TIMEOUT_MS = 2_500;
 const THUMB_SIZE = 800;
+
+const ALLOWED_IMAGE_HOSTS = [
+  "upload.wikimedia.org",
+  "commons.wikimedia.org",
+] as const;
 
 export type ImageContext = {
   topic: string;
@@ -19,7 +24,18 @@ type WikimediaResponse = {
         thumbnail?: { source?: string };
         title?: string;
         missing?: boolean;
-        pageprops?: { disambiguation?: string };
+      }
+    >;
+  };
+};
+
+type CommonsResponse = {
+  query?: {
+    pages?: Record<
+      string,
+      {
+        title?: string;
+        imageinfo?: Array<{ thumburl?: string; url?: string }>;
       }
     >;
   };
@@ -27,10 +43,6 @@ type WikimediaResponse = {
 
 function decodeWikiTitle(segment: string): string {
   return decodeURIComponent(segment.replace(/_/g, " ")).trim();
-}
-
-function slugifyTitle(title: string): string {
-  return title.replace(/ /g, "_");
 }
 
 /** Pull exact article titles from Wikipedia / Grokipedia URLs in post sources. */
@@ -64,42 +76,19 @@ export function extractArticleTitlesFromLinks(links: PostLink[] = []): string[] 
   return titles;
 }
 
-function condenseSubjectForSearch(subject: string): string {
-  const stripped = subject
-    .replace(/\?$/g, "")
-    .replace(/^(how|why|what|when|where)\s+/i, "")
-    .trim();
-
-  const words = stripped
-    .replace(/[^a-z0-9\s-]/gi, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 3)
-    .slice(0, 5);
-
-  return words.join(" ");
-}
-
-/** Ordered lookup keys: wiki term → link article → condensed subject → title words. */
-export function buildImageLookupQueries(ctx: ImageContext): string[] {
+/** Subject-first Wikipedia title lookups for direct thumbnail batch. */
+export function buildTitleCandidates(ctx: ImageContext): string[] {
+  const fromLinks = extractArticleTitlesFromLinks(ctx.links);
   const fromWikiTerms = (ctx.wiki_terms ?? [])
     .map((t) => t.term.trim())
     .filter(Boolean);
-  const fromLinks = extractArticleTitlesFromLinks(ctx.links);
+
   const subject = ctx.subject?.trim();
-  const condensedSubject = subject ? condenseSubjectForSearch(subject) : "";
-  const titleWords = ctx.title
-    .replace(/[^\w\s]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 3)
-    .slice(0, 4)
-    .join(" ");
 
   const candidates = [
-    ...fromWikiTerms,
+    ...(subject ? [subject] : []),
     ...fromLinks,
-    ...(condensedSubject.length > 6 ? [condensedSubject] : []),
-    ...(subject && subject.length <= 72 ? [subject] : []),
-    ...(titleWords.length > 6 ? [titleWords] : []),
+    ...fromWikiTerms,
     ctx.topic.replace(/[^\w\s&+-]/g, " ").trim(),
   ];
 
@@ -112,41 +101,65 @@ export function buildImageLookupQueries(ctx: ImageContext): string[] {
   });
 }
 
-async function fetchSummaryThumbnail(query: string): Promise<string | null> {
-  const slug = slugifyTitle(query);
+/** Subject-led fallback search when exact titles miss thumbnails. */
+export function buildSearchQuery(ctx: ImageContext): string {
+  const subject = ctx.subject?.trim();
+  if (subject) return subject;
 
+  const wikiTerm = ctx.wiki_terms?.[0]?.term?.trim();
+  if (wikiTerm) return wikiTerm;
+
+  const linkTitle = extractArticleTitlesFromLinks(ctx.links)[0];
+  if (linkTitle) return linkTitle;
+
+  const titleWords = ctx.title
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 4)
+    .join(" ");
+
+  return titleWords || ctx.topic;
+}
+
+export function isAllowedImageUrl(url: string): boolean {
   try {
-    const response = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`,
-      {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
-        next: { revalidate: 86400 },
-      }
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.replace(/^www\./, "");
+    return ALLOWED_IMAGE_HOSTS.some(
+      (allowed) => host === allowed || host.endsWith(`.${allowed}`)
     );
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as {
-      thumbnail?: { source?: string };
-      type?: string;
-    };
-    if (data.type === "disambiguation") return null;
-    return data.thumbnail?.source ?? null;
   } catch {
-    return null;
+    return false;
   }
 }
 
-async function fetchFirstSearchThumbnail(query: string): Promise<string | null> {
+function normalizeImageUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of urls) {
+    if (!isAllowedImageUrl(raw) || seen.has(raw)) continue;
+    seen.add(raw);
+    out.push(raw);
+  }
+
+  return out;
+}
+
+async function fetchWikipediaImagesBatch(
+  titles: string[]
+): Promise<string[]> {
+  if (titles.length === 0) return [];
+
   try {
     const params = new URLSearchParams({
       action: "query",
       format: "json",
       origin: "*",
-      generator: "search",
-      gsrsearch: query,
-      gsrlimit: "5",
-      prop: "pageimages|pageprops",
+      titles: titles.slice(0, 3).join("|"),
+      prop: "pageimages",
       piprop: "thumbnail",
       pithumbsize: String(THUMB_SIZE),
       redirects: "1",
@@ -159,61 +172,183 @@ async function fetchFirstSearchThumbnail(query: string): Promise<string | null> 
         next: { revalidate: 86400 },
       }
     );
-    if (!response.ok) return null;
+
+    if (!response.ok) return [];
 
     const data = (await response.json()) as WikimediaResponse;
+    const urls: string[] = [];
+
     for (const page of Object.values(data.query?.pages ?? {})) {
-      if (page.missing || page.pageprops?.disambiguation) continue;
+      if (page.missing) continue;
       const src = page.thumbnail?.source;
-      if (src) return src;
+      if (src) urls.push(src);
     }
+
+    return normalizeImageUrls(urls);
   } catch {
-    /* no image */
+    return [];
   }
-
-  return null;
 }
 
-/**
- * Fast subject-first image lookup: try wiki-linked terms and subject queries,
- * return the first relevant Wikipedia thumbnail found.
- */
-export async function fetchPostImageForSubject(
-  ctx: ImageContext
-): Promise<string | null> {
-  const queries = buildImageLookupQueries(ctx);
-  if (queries.length === 0) return null;
+async function fetchWikipediaSearchImages(
+  search: string,
+  limit = 3
+): Promise<string[]> {
+  if (!search.trim()) return [];
 
-  for (const query of queries.slice(0, 3)) {
-    const direct = await fetchSummaryThumbnail(query);
-    if (direct) return direct;
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      format: "json",
+      origin: "*",
+      generator: "search",
+      gsrsearch: search,
+      gsrlimit: String(limit),
+      prop: "pageimages",
+      piprop: "thumbnail",
+      pithumbsize: String(THUMB_SIZE),
+    });
+
+    const response = await fetch(
+      `https://en.wikipedia.org/w/api.php?${params}`,
+      {
+        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
+        next: { revalidate: 86400 },
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as WikimediaResponse;
+    const urls: string[] = [];
+
+    for (const page of Object.values(data.query?.pages ?? {})) {
+      const src = page.thumbnail?.source;
+      if (src) urls.push(src);
+    }
+
+    return normalizeImageUrls(urls);
+  } catch {
+    return [];
   }
-
-  for (const query of queries.slice(0, 2)) {
-    const fromSearch = await fetchFirstSearchThumbnail(query);
-    if (fromSearch) return fromSearch;
-  }
-
-  return null;
 }
 
-/** @deprecated Use fetchPostImageForSubject */
+function isLikelyDecorativeCommonsFile(title: string): boolean {
+  const lower = title.toLowerCase();
+  return (
+    lower.includes("icon") ||
+    lower.includes("logo") ||
+    lower.includes("pictogram")
+  );
+}
+
+/** Wikimedia Commons search — many Wikipedia articles have no lead image. */
+async function fetchCommonsSearchImages(
+  search: string,
+  limit = 3
+): Promise<string[]> {
+  if (!search.trim()) return [];
+
+  try {
+    const params = new URLSearchParams({
+      action: "query",
+      format: "json",
+      origin: "*",
+      generator: "search",
+      gsrsearch: search,
+      gsrnamespace: "6",
+      gsrlimit: String(Math.min(limit * 3, 12)),
+      prop: "imageinfo",
+      iiprop: "url",
+      iiurlwidth: String(THUMB_SIZE),
+    });
+
+    const response = await fetch(
+      `https://commons.wikimedia.org/w/api.php?${params}`,
+      {
+        signal: AbortSignal.timeout(WIKI_REQUEST_TIMEOUT_MS),
+        next: { revalidate: 86400 },
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as CommonsResponse;
+    const urls: string[] = [];
+
+    for (const page of Object.values(data.query?.pages ?? {})) {
+      const title = page.title ?? "";
+      if (isLikelyDecorativeCommonsFile(title)) continue;
+
+      const src =
+        page.imageinfo?.[0]?.thumburl ?? page.imageinfo?.[0]?.url ?? null;
+      if (src) urls.push(src);
+      if (urls.length >= limit) break;
+    }
+
+    return normalizeImageUrls(urls);
+  } catch {
+    return [];
+  }
+}
+
+function appendUniqueUrls(
+  urls: string[],
+  seen: Set<string>,
+  incoming: string[],
+  limit: number
+): void {
+  for (const url of incoming) {
+    if (urls.length >= limit) return;
+    if (!seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+}
+
+/** Collect up to `limit` unique thumbnails — parallel wiki lookups, subject-first merge. */
+export async function fetchImageCandidates(
+  ctx: ImageContext,
+  limit = 3
+): Promise<string[]> {
+  const titles = buildTitleCandidates(ctx);
+  const search = buildSearchQuery(ctx);
+
+  const [fromTitles, fromSearch, fromCommons] = await Promise.all([
+    fetchWikipediaImagesBatch(titles),
+    fetchWikipediaSearchImages(search, limit),
+    fetchCommonsSearchImages(search, limit),
+  ]);
+
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  appendUniqueUrls(urls, seen, fromTitles, limit);
+  appendUniqueUrls(urls, seen, fromSearch, limit);
+  appendUniqueUrls(urls, seen, fromCommons, limit);
+
+  return urls.slice(0, limit);
+}
+
 export async function fetchFirstImageCandidate(
   ctx: ImageContext
 ): Promise<string | null> {
-  return fetchPostImageForSubject(ctx);
+  const urls = await fetchImageCandidates(ctx, 1);
+  return urls[0] ?? null;
 }
 
-/** @deprecated Use fetchPostImageForSubject */
 export async function fetchRelevantImage(ctx: ImageContext): Promise<string | null> {
-  return fetchPostImageForSubject(ctx);
+  return fetchFirstImageCandidate(ctx);
 }
 
-/** @deprecated Use fetchPostImageForSubject */
-export async function fetchImageCandidates(
-  ctx: ImageContext,
-  _limit = 3
-): Promise<string[]> {
-  const image = await fetchPostImageForSubject(ctx);
-  return image ? [image] : [];
+/** @deprecated Use fetchImageCandidates / fetchFirstImageCandidate */
+export async function fetchPostImageForSubject(
+  ctx: ImageContext
+): Promise<string | null> {
+  return fetchFirstImageCandidate(ctx);
+}
+
+/** @deprecated Use buildTitleCandidates / buildSearchQuery */
+export function buildImageLookupQueries(ctx: ImageContext): string[] {
+  return buildTitleCandidates(ctx);
 }
