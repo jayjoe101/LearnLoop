@@ -1,198 +1,175 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
-import { useLivePosting } from "@/hooks/use-live-posting";
+import { useState, useTransition, useRef } from "react";
+import {
+  generateNewPost,
+  loadMorePosts,
+  refreshFeed,
+  togglePersonalization,
+} from "@/lib/actions";
 import { PostCard } from "@/components/post-card";
-import { PlusIcon } from "@/components/icons";
+import type { Post, PostInteraction } from "@/lib/types";
 import { NightNowButton } from "@/components/night-now-button";
-import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
+import { useScrollFloat } from "@/hooks/use-scroll-float";
 
 type Props = {
   posts: Post[];
-  topics: Topic[];
   interactions: Record<string, PostInteraction>;
-  feedStyle?: FeedStyle;
+  hasXaiKey: boolean;
 };
 
-type FeedFilter = "all" | "liked";
-
-export function Feed({ posts, topics, interactions, feedStyle }: Props) {
-  const [topicInput, setTopicInput] = useState("");
+export function Feed({ posts, interactions, hasXaiKey }: Props) {
+  const [prompt, setPrompt] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [filter, setFilter] = useState<FeedFilter>("all");
+  const [activeTab, setActiveTab] = useState<"for-you" | "following" | "explore">(
+    "for-you"
+  );
 
-  const {
-    liveOn,
-    toggleLive,
-    displayedPosts,
-    pendingCount,
-    loadPending,
-  } = useLivePosting(posts);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useScrollFloat(scrollRef);
 
   const visiblePosts =
-    filter === "liked"
-      ? displayedPosts.filter((p) => interactions[p.id]?.liked)
-      : displayedPosts.filter((p) => !interactions[p.id]?.not_interested);
+    activeTab === "following"
+      ? posts.filter((p) => interactions[p.id]?.liked)
+      : posts.filter((p) => !interactions[p.id]?.not_interested);
 
-  function handleAddTopic(e: React.FormEvent) {
-    e.preventDefault();
-    const name = topicInput.trim();
-    if (!name) return;
-
+  function handleSendPrompt() {
     startTransition(async () => {
-      await addTopic(name);
-      setTopicInput("");
+      await generateNewPost(prompt || undefined);
+      setPrompt("");
     });
   }
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col animate-fade-in">
-      <header className="surface-panel sticky top-0 z-20 border-b">
-        <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 py-4 sm:max-w-2xl">
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-text)]">
-              LearnLoop
-            </h1>
-            <p className="text-xs text-[var(--color-coffee-mocha)]">Your feed</p>
-          </div>
+    <main className="flex flex-1 flex-col">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b px-6 py-3 border-[var(--border-color)] bg-[var(--bg-header)]">
+        <nav className="flex gap-8 text-sm font-medium">
+          <button
+            type="button"
+            onClick={() => setActiveTab("for-you")}
+            className={
+              activeTab === "for-you"
+                ? "border-b-2 pb-1 border-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            }
+          >
+            For You
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("following")}
+            className={
+              activeTab === "following"
+                ? "border-b-2 pb-1 border-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            }
+          >
+            Following
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("explore");
+              startTransition(async () => {
+                await refreshFeed();
+              });
+            }}
+            className={
+              activeTab === "explore"
+                ? "border-b-2 pb-1 border-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            }
+          >
+            Explore
+          </button>
+        </nav>
 
-          <nav className="tab-tactile-group shrink-0">
-            {(
-              [
-                { id: "all" as const, label: "Feed" },
-                { id: "liked" as const, label: "Liked" },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setFilter(tab.id)}
-                className={`tab-tactile ${
-                  filter === tab.id ? "tab-tactile-active" : ""
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+        <div className="flex flex-1 items-center justify-center gap-3 px-6">
+          <input
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSendPrompt()}
+            className="w-full max-w-md rounded-full border px-4 py-2 text-sm outline-none border-[var(--border-color)] bg-[var(--bg-input)] placeholder:text-[var(--text-muted)]"
+            placeholder="Ask Grok for a topic or type custom prompt..."
+          />
+          <button
+            type="button"
+            onClick={handleSendPrompt}
+            disabled={isPending}
+            className="shrink-0 rounded-full px-5 py-2 text-sm bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:opacity-90 disabled:opacity-50"
+          >
+            Send to Grok
+          </button>
+        </div>
 
-          {filter === "all" && (
-            <button
-              type="button"
-              onClick={toggleLive}
-              className={`btn-tactile btn-tactile-pill flex shrink-0 items-center gap-2 px-3 py-1.5 text-xs font-medium ${
-                liveOn ? "live-toggle-active" : "btn-tactile-ghost"
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full transition-transform duration-300 ${
-                  liveOn
-                    ? "animate-pulse bg-[var(--color-coffee-sage)] scale-110"
-                    : "bg-[var(--color-coffee-taupe)]"
-                }`}
-                aria-hidden
-              />
-              Live posting
-            </button>
-          )}
+        <div className="flex items-center gap-3">
           <NightNowButton />
-        </div>
 
-        <div
-          className={`live-pending-banner border-t border-[var(--color-border)] ${
-            filter === "all" && pendingCount > 0
-              ? "live-pending-banner--visible"
-              : ""
-          }`}
-        >
-          <div className="flex justify-center py-2.5">
-            <button
-              type="button"
-              onClick={loadPending}
-              className="btn-tactile btn-tactile-accent btn-tactile-pill animate-banner-in px-4 py-1.5 text-xs"
-            >
-              Load {pendingCount} new {pendingCount === 1 ? "post" : "posts"}
-            </button>
-          </div>
-        </div>
-
-        <div className="border-t border-[var(--color-border)] px-5 py-3 lg:hidden">
-          <div className="mx-auto flex max-w-xl flex-wrap gap-1.5 sm:max-w-2xl">
-            {topics.map((topic) => (
-              <button
-                key={topic.id}
-                type="button"
-                disabled={isPending}
-                aria-label={`Remove ${topic.name} from interests`}
-                onClick={() =>
-                  startTransition(async () => {
-                    await removeTopic(topic.id);
-                  })
-                }
-                className="chip-tactile btn-tactile"
-              >
-                {topic.name}
-              </button>
-            ))}
-            <form onSubmit={handleAddTopic} className="flex items-center gap-1">
-              <input
-                value={topicInput}
-                onChange={(e) => setTopicInput(e.target.value)}
-                placeholder="Topic"
-                className="onboarding-input w-20 px-2 py-1 text-xs"
-              />
-              <button
-                type="submit"
-                disabled={!topicInput.trim()}
-                className="btn-tactile icon-btn p-1.5"
-              >
-                <PlusIcon className="h-3.5 w-3.5" />
-              </button>
-            </form>
-          </div>
+          <button type="button" className="px-3" aria-label="Profile">
+            👤
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              startTransition(async () => {
+                await togglePersonalization();
+              })
+            }
+            className="rounded-full bg-[var(--accent-amber)] px-4 py-1 text-xs font-semibold text-[var(--accent-amber-contrast)] hover:opacity-90 floaty-lift"
+          >
+            REFINE ALGO
+          </button>
         </div>
       </header>
 
-      <div className="feed-scroll flex-1 overflow-auto">
-        <div className="mx-auto max-w-xl px-5 py-8 sm:max-w-2xl">
-          {visiblePosts.length === 0 ? (
-            <div className="feed-empty-enter py-24 text-center">
-              <p className="text-sm text-[var(--color-coffee-mocha)]">
-                {filter === "liked"
-                  ? "No liked posts yet"
-                  : "Your feed is empty"}
-              </p>
-              {filter === "all" && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    startTransition(async () => {
-                      await generateNewPost();
-                    })
-                  }
-                  disabled={isPending}
-                  className="btn-tactile btn-tactile-secondary btn-tactile-pill mt-6 px-5 py-2 text-sm"
-                >
-                  Generate an insight
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-14">
-              {visiblePosts.map((post, index) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  interaction={interactions[post.id]}
-                  feedStyle={feedStyle}
-                  index={index}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      <div ref={scrollRef} className="feed-scroll flex-1 space-y-8 overflow-auto p-4">
+        {visiblePosts.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-[var(--text-muted)]">
+            <p className="text-lg">No posts yet</p>
+            <button
+              type="button"
+              onClick={() =>
+                startTransition(async () => {
+                  await generateNewPost();
+                })
+              }
+              className="mt-4 rounded-full px-6 py-2 text-sm bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] floaty-lift"
+            >
+              Generate your first post
+            </button>
+          </div>
+        ) : (
+          visiblePosts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              interaction={interactions[post.id]}
+            />
+          ))
+        )}
       </div>
-    </div>
+
+      <footer className="border-t py-4 text-center text-sm">
+        ↓ Keep scrolling •{" "}
+        <button
+          type="button"
+          onClick={() =>
+            startTransition(async () => {
+              await loadMorePosts(2);
+            })
+          }
+          disabled={isPending}
+          className="underline hover:opacity-80 disabled:opacity-50 floaty-lift"
+        >
+          Load more
+        </button>{" "}
+        •{" "}
+        <span className="text-[var(--accent-emerald)]">
+          {hasXaiKey
+            ? "Live Grok generation enabled"
+            : "Add XAI_API_KEY for live Grok generation"}
+        </span>
+      </footer>
+    </main>
   );
 }

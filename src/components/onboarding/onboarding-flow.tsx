@@ -87,7 +87,7 @@ export function OnboardingFlow() {
               <div
                 key={i}
                 className={`h-0.5 flex-1 rounded-full transition-all duration-500 ${
-                  filled ? "bg-[var(--color-coffee-caramel)]" : "bg-[var(--color-coffee-elevated)]"
+                  filled ? "bg-[var(--accent-violet)]" : "bg-[var(--bg-elevated)]"
                 }`}
               />
             );
@@ -97,20 +97,20 @@ export function OnboardingFlow() {
         {step === "welcome" && (
           <div key="welcome" className="onboarding-step">
             <div className="onboarding-orb mx-auto mb-8" />
-            <h1 className="text-center text-2xl font-semibold tracking-tight text-[var(--color-coffee-text)]">
-              LearnLoop
+            <h1 className="text-center text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+              InsightScroll
             </h1>
-            <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-relaxed text-[var(--color-coffee-mocha)]">
+            <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-relaxed text-[var(--text-secondary)]">
               A feed tuned to what you care about. Pick your interests and start
               scrolling with purpose.
             </p>
-            <p className="mt-6 text-center text-xs text-[var(--color-coffee-taupe)]">
+            <p className="mt-6 text-center text-xs text-[var(--text-muted)]">
               Your profile saves automatically in this browser.
             </p>
             <button
               type="button"
               onClick={goNext}
-              className="onboarding-btn-primary mt-10 w-full"
+              className="onboarding-btn-primary mt-10 w-full floaty-lift"
             >
               Get started
             </button>
@@ -119,10 +119,10 @@ export function OnboardingFlow() {
 
         {step === "interests" && (
           <div key="interests" className="onboarding-step">
-            <h2 className="text-xl font-semibold tracking-tight text-[var(--color-coffee-text)]">
+            <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
               What interests you?
             </h2>
-            <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
               Choose at least {MIN_TOPICS}. These are broad interest areas — each
               post will pick a specific subject inside one of them.
             </p>
@@ -135,7 +135,7 @@ export function OnboardingFlow() {
                     key={topic}
                     type="button"
                     onClick={() => toggleTopic(topic)}
-                    className={`onboarding-chip ${active ? "onboarding-chip-active" : ""}`}
+                    className={`onboarding-chip floaty-lift ${active ? "onboarding-chip-active" : ""}`}
                     style={{ animationDelay: `${i * 35}ms` }}
                   >
                     {topic}
@@ -151,7 +151,7 @@ export function OnboardingFlow() {
                     key={topic}
                     type="button"
                     onClick={() => toggleTopic(topic)}
-                    className="onboarding-chip onboarding-chip-active"
+                    className="onboarding-chip onboarding-chip-active floaty-lift"
                     style={{ animationDelay: `${i * 35}ms` }}
                     aria-label={`Remove ${topic}`}
                   >
@@ -173,13 +173,13 @@ export function OnboardingFlow() {
                 type="button"
                 onClick={addCustomTopic}
                 disabled={!customTopic.trim() || selectedTopics.length >= MAX_TOPICS}
-                className="onboarding-btn-secondary shrink-0 px-4"
+                className="onboarding-btn-secondary shrink-0 px-4 floaty-lift"
               >
                 Add
               </button>
             </div>
 
-            <p className="mt-4 text-xs text-[var(--color-coffee-taupe)]">
+            <p className="mt-4 text-xs text-[var(--text-muted)]">
               {selectedTopics.length} selected
               {selectedTopics.length < MIN_TOPICS &&
                 ` · ${MIN_TOPICS - selectedTopics.length} more needed`}
@@ -193,7 +193,7 @@ export function OnboardingFlow() {
               type="button"
               onClick={goNext}
               disabled={selectedTopics.length < MIN_TOPICS || isPending}
-              className="onboarding-btn-primary mt-8 w-full disabled:opacity-40"
+              className="onboarding-btn-primary mt-8 w-full disabled:opacity-40 floaty-lift"
             >
               Build my feed
             </button>
@@ -203,19 +203,19 @@ export function OnboardingFlow() {
         {step === "building" && (
           <div key="building" className="onboarding-step py-8 text-center">
             <div className="onboarding-orb mx-auto mb-8 onboarding-orb-pulse" />
-            <h2 className="text-lg font-medium text-[var(--color-coffee-text)]">
+            <h2 className="text-lg font-medium text-[var(--text-primary)]">
               Building your feed
             </h2>
-            <p className="mt-2 text-sm text-[var(--color-coffee-mocha)]">
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
               Discovering specific subjects from your interests…
             </p>
-            <div className="mx-auto mt-8 h-1 max-w-xs overflow-hidden rounded-full bg-[var(--color-coffee-elevated)]">
+            <div className="mx-auto mt-8 h-1 max-w-xs overflow-hidden rounded-full bg-[var(--bg-elevated)]">
               <div
-                className="onboarding-progress-bar h-full rounded-full bg-[var(--color-coffee-caramel)] transition-all duration-300"
+                className="onboarding-progress-bar h-full rounded-full bg-[var(--accent-violet)] transition-all duration-300"
                 style={{ width: `${buildProgress}%` }}
               />
             </div>
-            <p className="mt-4 text-xs text-[var(--color-coffee-taupe)]">
+            <p className="mt-4 text-xs text-[var(--text-muted)]">
               {buildProgress < 100 ? "Generating first posts" : "Ready"}
             </p>
           </div>

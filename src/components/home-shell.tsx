@@ -9,9 +9,10 @@ type Props = {
   topics: Topic[];
   profile: Profile | null;
   interactions: Record<string, PostInteraction>;
+  hasXaiKey: boolean;
 };
 
-export function HomeShell({ posts, topics, profile, interactions }: Props) {
+export function HomeShell({ posts, topics, profile, interactions, hasXaiKey }: Props) {
   if (!profile?.onboarding_completed) {
     return <OnboardingFlow />;
   }
@@ -22,6 +23,7 @@ export function HomeShell({ posts, topics, profile, interactions }: Props) {
       topics={topics}
       profile={profile}
       interactions={interactions}
+      hasXaiKey={hasXaiKey}
     />
   );
 }

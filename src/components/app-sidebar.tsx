@@ -25,16 +25,16 @@ export function AppSidebar({ topics }: Props) {
   }
 
   return (
-    <aside className="hidden w-56 shrink-0 flex-col border-r border-[var(--color-border)] lg:flex">
+    <aside className="hidden w-56 shrink-0 flex-col border-r border-[var(--border-color)] lg:flex">
       <div className="px-5 py-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--color-coffee-text-soft)]">
-          LearnLoop
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--text-primary)]">
+          InsightScroll
         </p>
       </div>
 
       <div className="flex flex-1 flex-col gap-8 px-5">
         <section>
-          <p className="mb-3 text-xs font-medium text-[var(--color-coffee-mocha)]">
+          <p className="mb-3 text-xs font-medium text-[var(--text-secondary)]">
             Interests
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -49,7 +49,7 @@ export function AppSidebar({ topics }: Props) {
                     await removeTopic(topic.id);
                   })
                 }
-                className="chip-tactile btn-tactile"
+                className="chip-tactile btn-tactile floaty-lift"
               >
                 {topic.name}
               </button>
@@ -65,7 +65,7 @@ export function AppSidebar({ topics }: Props) {
             <button
               type="submit"
               disabled={isPending || !topicInput.trim()}
-              className="btn-tactile icon-btn p-1.5 disabled:opacity-40"
+              className="btn-tactile icon-btn p-1.5 disabled:opacity-40 floaty-lift"
               aria-label="Add topic"
             >
               <PlusIcon className="h-3.5 w-3.5" />
@@ -74,7 +74,7 @@ export function AppSidebar({ topics }: Props) {
         </section>
       </div>
 
-      <div className="border-t border-[var(--color-border)] p-5">
+      <div className="border-t border-[var(--border-color)] p-5">
         <button
           type="button"
           disabled={isPending}
@@ -83,7 +83,7 @@ export function AppSidebar({ topics }: Props) {
               await generateNewPost();
             })
           }
-          className="btn-tactile btn-tactile-primary flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs"
+          className="btn-tactile btn-tactile-primary flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs floaty-lift"
         >
           <SparkIcon className="h-3.5 w-3.5" />
           {isPending ? "Generating…" : "New insight"}

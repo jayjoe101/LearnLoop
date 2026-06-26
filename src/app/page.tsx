@@ -1,7 +1,13 @@
 import { redirect } from "next/navigation";
 import { HomeShell } from "@/components/home-shell";
 import { getFeedData } from "@/lib/actions";
-import { isSupabaseConfigured } from "@/lib/env";
+
+function isSupabaseConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
 
 export default async function HomePage() {
   if (!isSupabaseConfigured()) {
@@ -17,6 +23,7 @@ export default async function HomePage() {
         topics={topics}
         profile={profile}
         interactions={interactions}
+        hasXaiKey={Boolean(process.env.XAI_API_KEY)}
       />
     );
   } catch {
