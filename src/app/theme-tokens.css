@@ -26,6 +26,7 @@
   --shadow-tooltip: 0 1px 0 var(--color-highlight-inset) inset,
     0 4px 14px var(--color-shadow-ink-mid);
   --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 28%, transparent);
+  --color-selection-bg-strong: color-mix(in srgb, var(--color-coffee-honey) 52%, transparent);
   --color-code-keyword: var(--color-coffee-caramel);
   --color-code-string: var(--color-coffee-sage);
   --color-code-literal: var(--color-coffee-honey);
@@ -173,6 +174,7 @@
   --shadow-tooltip: 0 1px 0 var(--color-highlight-inset) inset,
     0 6px 18px var(--color-shadow-ink);
   --color-selection-bg: color-mix(in srgb, var(--color-coffee-honey) 22%, transparent);
+  --color-selection-bg-strong: color-mix(in srgb, var(--color-coffee-honey) 48%, transparent);
   --color-accent-on-fill: var(--color-coffee-text);
   --gradient-btn-primary: linear-gradient(
     180deg,

@@ -6,9 +6,8 @@ import { CopyIcon, SparkIcon } from "@/components/icons";
 
 const TOOLBAR_WIDTH = 72;
 const TOOLBAR_OFFSET = 8;
-const HIGHLIGHT_NAME = "learnloop-post-selection";
 const LINE_TOLERANCE_PX = 4;
-const MERGE_GAP_PX = 10;
+const MERGE_GAP_PX = 12;
 
 type HighlightRect = {
   top: number;
@@ -17,39 +16,17 @@ type HighlightRect = {
   height: number;
 };
 
-type SelectionState = {
+type HighlightState = {
   text: string;
+  rects: HighlightRect[];
   toolbarTop: number;
   toolbarLeft: number;
-  rects: HighlightRect[];
 };
 
 type RelativeRect = HighlightRect & {
   right: number;
   bottom: number;
 };
-
-function supportsCustomHighlight(): boolean {
-  return (
-    typeof CSS !== "undefined" &&
-    "highlights" in CSS &&
-    typeof Highlight !== "undefined"
-  );
-}
-
-function setCustomHighlight(range: Range | null) {
-  if (!supportsCustomHighlight()) return;
-  if (!range) {
-    CSS.highlights.delete(HIGHLIGHT_NAME);
-    return;
-  }
-  CSS.highlights.set(HIGHLIGHT_NAME, new Highlight(range));
-}
-
-function clearCustomHighlight() {
-  if (!supportsCustomHighlight()) return;
-  CSS.highlights.delete(HIGHLIGHT_NAME);
-}
 
 function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
   if (rects.length === 0) return [];
@@ -78,11 +55,12 @@ function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
       if (gap <= MERGE_GAP_PX) {
         const right = Math.max(current.right, next.right);
         const bottom = Math.max(current.bottom, next.bottom);
+        const top = Math.min(current.top, next.top);
         current = {
-          top: Math.min(current.top, next.top),
+          top,
           left: current.left,
           width: right - current.left,
-          height: bottom - Math.min(current.top, next.top),
+          height: bottom - top,
           right,
           bottom,
         };
@@ -108,26 +86,24 @@ function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
   return merged;
 }
 
-function getRangeHighlightRects(range: Range, container: HTMLElement): HighlightRect[] {
-  const containerRect = container.getBoundingClientRect();
-
+function getRangeHighlightRects(range: Range): HighlightRect[] {
   const relative = Array.from(range.getClientRects())
     .filter((rect) => rect.width > 0.5 && rect.height > 0.5)
     .map((rect) => ({
-      top: rect.top - containerRect.top,
-      left: rect.left - containerRect.left,
+      top: rect.top,
+      left: rect.left,
       width: rect.width,
       height: rect.height,
-      right: rect.right - containerRect.left,
-      bottom: rect.bottom - containerRect.top,
+      right: rect.right,
+      bottom: rect.bottom,
     }));
 
   return mergeSelectionRects(relative);
 }
 
-function getSelectionInContainer(
+function readSelection(
   container: HTMLElement
-): { text: string; rect: DOMRect; range: Range; rects: HighlightRect[] } | null {
+): HighlightState | null {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
     return null;
@@ -143,11 +119,14 @@ function getSelectionInContainer(
   const rect = range.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return null;
 
+  const rects = getRangeHighlightRects(range);
+  if (rects.length === 0) return null;
+
   return {
     text,
-    rect,
-    range,
-    rects: getRangeHighlightRects(range, container),
+    rects,
+    toolbarTop: rect.top - TOOLBAR_OFFSET,
+    toolbarLeft: rect.right - TOOLBAR_WIDTH,
   };
 }
 
@@ -159,95 +138,123 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const liveId = useId();
-  const useHighlightApiRef = useRef(supportsCustomHighlight());
-  const [selection, setSelection] = useState<SelectionState | null>(null);
+  const rafRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const highlightRef = useRef<HighlightState | null>(null);
+  const showToolbarRef = useRef(false);
+
+  const [highlight, setHighlight] = useState<HighlightState | null>(null);
+  const [showToolbar, setShowToolbar] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const clearSelection = useCallback(() => {
-    clearCustomHighlight();
-    setSelection(null);
+  highlightRef.current = highlight;
+  showToolbarRef.current = showToolbar;
+
+  const clearHighlight = useCallback(() => {
+    setHighlight(null);
+    setShowToolbar(false);
     setCopied(false);
   }, []);
 
-  const updateSelection = useCallback(() => {
+  const syncHighlight = useCallback((finalize = false) => {
     const container = containerRef.current;
     if (!container) {
-      clearSelection();
+      clearHighlight();
       return;
     }
 
-    const result = getSelectionInContainer(container);
-    if (!result) {
-      clearSelection();
+    const next = readSelection(container);
+    if (!next) {
+      clearHighlight();
       return;
     }
 
-    if (useHighlightApiRef.current) {
-      setCustomHighlight(result.range);
-    } else {
-      clearCustomHighlight();
+    setHighlight(next);
+    if (finalize) {
+      setShowToolbar(true);
     }
+  }, [clearHighlight]);
 
-    setCopied(false);
-    setSelection({
-      text: result.text,
-      toolbarTop: result.rect.top - TOOLBAR_OFFSET,
-      toolbarLeft: result.rect.right - TOOLBAR_WIDTH,
-      rects: result.rects,
-    });
-  }, [clearSelection]);
+  const scheduleSync = useCallback(
+    (finalize = false) => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => syncHighlight(finalize));
+    },
+    [syncHighlight]
+  );
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      if (!container.contains(event.target as Node)) return;
+      isDraggingRef.current = true;
+      setShowToolbar(false);
+      setCopied(false);
+    };
+
     const onMouseUp = () => {
-      requestAnimationFrame(updateSelection);
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      scheduleSync(true);
     };
 
     const onSelectionChange = () => {
-      requestAnimationFrame(updateSelection);
+      scheduleSync(false);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") clearSelection();
+      if (event.key === "Escape") clearHighlight();
+    };
+
+    const onScroll = () => {
+      if (!highlightRef.current) return;
+      scheduleSync(showToolbarRef.current);
     };
 
     const onResize = () => {
-      if (!selection) return;
-      updateSelection();
+      if (!highlightRef.current) return;
+      scheduleSync(showToolbarRef.current);
     };
 
+    container.addEventListener("mousedown", onMouseDown);
     document.addEventListener("mouseup", onMouseUp);
     document.addEventListener("selectionchange", onSelectionChange);
     document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
+      container.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("selectionchange", onSelectionChange);
       document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
-      clearCustomHighlight();
     };
-  }, [clearSelection, selection, updateSelection]);
+  }, [clearHighlight, scheduleSync]);
 
   useEffect(() => {
-    if (!selection) return;
+    if (!showToolbar) return;
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (toolbarRef.current?.contains(target)) return;
       if (containerRef.current?.contains(target)) return;
-      clearSelection();
+      clearHighlight();
     };
 
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [clearSelection, selection]);
+  }, [clearHighlight, showToolbar]);
 
   async function handleCopy() {
-    if (!selection?.text) return;
+    if (!highlight?.text) return;
 
     try {
-      await navigator.clipboard.writeText(selection.text);
+      await navigator.clipboard.writeText(highlight.text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     } catch {
@@ -255,18 +262,36 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const showFallbackHighlight =
-    selection && !useHighlightApiRef.current && selection.rects.length > 0;
+  const highlightPortal =
+    highlight && highlight.rects.length > 0 && typeof document !== "undefined"
+      ? createPortal(
+          <div className="post-selection-highlight-layer" aria-hidden>
+            {highlight.rects.map((rect, index) => (
+              <div
+                key={index}
+                className="post-selection-highlight"
+                style={{
+                  top: rect.top,
+                  left: rect.left,
+                  width: rect.width,
+                  height: rect.height,
+                }}
+              />
+            ))}
+          </div>,
+          document.body
+        )
+      : null;
 
   const toolbarPortal =
-    selection && typeof document !== "undefined"
+    showToolbar && highlight && typeof document !== "undefined"
       ? createPortal(
           <div
             ref={toolbarRef}
             className="post-selection-toolbar toolbar-icon-group"
             style={{
-              top: Math.max(8, selection.toolbarTop - 36),
-              left: Math.max(8, selection.toolbarLeft),
+              top: Math.max(8, highlight.toolbarTop - 36),
+              left: Math.max(8, highlight.toolbarLeft),
             }}
             role="toolbar"
             aria-label="Text selection actions"
@@ -305,28 +330,13 @@ export function PostTextSelection({ children }: { children: React.ReactNode }) {
     <div
       ref={containerRef}
       className={
-        selection
+        highlight
           ? "post-text-selection post-text-selection--active"
           : "post-text-selection"
       }
     >
-      {showFallbackHighlight && (
-        <div className="post-selection-highlight-layer" aria-hidden>
-          {selection.rects.map((rect, index) => (
-            <div
-              key={index}
-              className="post-selection-highlight"
-              style={{
-                top: rect.top,
-                left: rect.left,
-                width: rect.width,
-                height: rect.height,
-              }}
-            />
-          ))}
-        </div>
-      )}
       {children}
+      {highlightPortal}
       {toolbarPortal}
     </div>
   );

@@ -840,16 +840,6 @@ button:disabled {
   position: relative;
 }
 
-.post-text-selection .post-prose {
-  position: relative;
-  z-index: 1;
-}
-
-::highlight(learnloop-post-selection) {
-  background-color: var(--color-selection-bg);
-  color: var(--color-coffee-text);
-}
-
 .post-text-selection--active .post-prose ::selection,
 .post-text-selection--active .post-prose *::selection {
   background: transparent;
@@ -857,17 +847,17 @@ button:disabled {
 }
 
 .post-selection-highlight-layer {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: 40;
   pointer-events: none;
   overflow: visible;
 }
 
 .post-selection-highlight {
-  position: absolute;
+  position: fixed;
   border-radius: 2px;
-  background: var(--color-selection-bg);
+  background: var(--color-selection-bg-strong);
 }
 
 .post-prose-lead,
