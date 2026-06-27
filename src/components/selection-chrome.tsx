@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CopyIcon, SparkIcon } from "@/components/icons";
 import { SelectionExplainPanel } from "@/components/selection-explain-panel";
+import { useActionTooltip } from "@/hooks/use-action-tooltip";
 import {
   getActiveDocumentRange,
   getPostIdFromRange,
@@ -40,7 +41,11 @@ function isPostSelectableArea(target: Node) {
 function shouldIgnoreOutsidePointer(target: Node) {
   return (
     target instanceof Element &&
-    Boolean(target.closest(".feed-header-controls, .post-selection-toolbar"))
+    Boolean(
+      target.closest(
+        ".feed-header-controls, .post-selection-toolbar, .action-tooltip__label"
+      )
+    )
   );
 }
 
@@ -91,14 +96,26 @@ export function SelectionChrome() {
   const suppressSelectionClearRef = useRef(false);
   const highlightRef = useRef<DocumentSelection | null>(null);
   const postToolbarRef = useRef<PostToolbarSelection | null>(null);
+  const postIdRef = useRef<string | null>(null);
   const showToolbarRef = useRef(false);
   const explainSessionRef = useRef<ExplainSession | null>(null);
+  const pinExplainSessionRef = useRef(false);
+  const toolbarInteractionRef = useRef(false);
 
   const [highlight, setHighlight] = useState<DocumentSelection | null>(null);
   const [postToolbar, setPostToolbar] = useState<PostToolbarSelection | null>(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const [copied, setCopied] = useState(false);
   const [explainSession, setExplainSession] = useState<ExplainSession | null>(null);
+
+  const explainTooltip = useActionTooltip({
+    label: "Explain selection",
+    placement: "below",
+  });
+  const copyTooltip = useActionTooltip({
+    label: copied ? "Copied" : "Copy",
+    placement: "below",
+  });
 
   highlightRef.current = highlight;
   postToolbarRef.current = postToolbar;
@@ -111,6 +128,10 @@ export function SelectionChrome() {
     setShowToolbar(false);
     setCopied(false);
     setExplainSession(null);
+    explainSessionRef.current = null;
+    postIdRef.current = null;
+    pinExplainSessionRef.current = false;
+    toolbarInteractionRef.current = false;
     setSelectionHighlightActive(false);
     shouldFinalizeToolbarRef.current = false;
     suppressSelectionClearRef.current = false;
@@ -119,7 +140,12 @@ export function SelectionChrome() {
   const runSync = useCallback(() => {
     const next = readDocumentSelection();
     if (!next) {
-      if (suppressSelectionClearRef.current || explainSessionRef.current) {
+      if (
+        suppressSelectionClearRef.current ||
+        explainSessionRef.current ||
+        toolbarInteractionRef.current ||
+        pinExplainSessionRef.current
+      ) {
         return;
       }
       clearChrome();
@@ -129,42 +155,53 @@ export function SelectionChrome() {
     setHighlight(next);
     setSelectionHighlightActive(true);
 
-    const wantsToolbar =
-      shouldFinalizeToolbarRef.current || !isPointerDownRef.current;
+    if (!shouldFinalizeToolbarRef.current) {
+      return;
+    }
 
-    if (wantsToolbar) {
-      const range = getActiveDocumentRange();
-      const inExplainPanel = range ? rangeIsWithinExplainPanel(range) : false;
-      const toolbarSelection = readPostToolbarSelection(
-        TOOLBAR_OFFSET,
-        TOOLBAR_WIDTH
-      );
+    const finalized = shouldFinalizeToolbarRef.current;
+    shouldFinalizeToolbarRef.current = false;
 
-      setPostToolbar(toolbarSelection);
-      shouldFinalizeToolbarRef.current = false;
+    const range = getActiveDocumentRange();
+    const inExplainPanel = range ? rangeIsWithinExplainPanel(range) : false;
+    const toolbarSelection = readPostToolbarSelection(
+      TOOLBAR_OFFSET,
+      TOOLBAR_WIDTH
+    );
 
-      if (inExplainPanel) {
-        setShowToolbar(false);
-        setCopied(false);
-        return;
-      }
+    setPostToolbar(toolbarSelection);
 
-      if (toolbarSelection) {
-        setExplainSession(null);
-        setShowToolbar(true);
-        return;
-      }
+    if (toolbarSelection && range) {
+      postIdRef.current = getPostIdFromRange(range);
+    }
 
+    if (inExplainPanel) {
       setShowToolbar(false);
       setCopied(false);
-      if (explainSessionRef.current) {
+      return;
+    }
+
+    if (toolbarSelection) {
+      if (
+        explainSessionRef.current &&
+        finalized &&
+        !pinExplainSessionRef.current
+      ) {
         setExplainSession(null);
+        explainSessionRef.current = null;
       }
+      pinExplainSessionRef.current = false;
+      setShowToolbar(!explainSessionRef.current);
       return;
     }
 
     setShowToolbar(false);
     setCopied(false);
+    if (explainSessionRef.current && finalized && !pinExplainSessionRef.current) {
+      setExplainSession(null);
+      explainSessionRef.current = null;
+    }
+    pinExplainSessionRef.current = false;
   }, [clearChrome]);
 
   const queueSync = useCallback(
@@ -212,6 +249,12 @@ export function SelectionChrome() {
       const target = event.target as Node;
 
       if (shouldIgnoreOutsidePointer(target)) {
+        if (
+          target instanceof Element &&
+          target.closest(".post-selection-toolbar")
+        ) {
+          toolbarInteractionRef.current = true;
+        }
         return;
       }
 
@@ -248,7 +291,14 @@ export function SelectionChrome() {
       setExplainSession(null);
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (event: PointerEvent) => {
+      const target = event.target as Node;
+
+      if (shouldIgnoreOutsidePointer(target)) {
+        isPointerDownRef.current = false;
+        return;
+      }
+
       isPointerDownRef.current = false;
 
       if (suppressSelectionClearRef.current && explainSessionRef.current) {
@@ -335,10 +385,13 @@ export function SelectionChrome() {
   }, [restoreAfterThemeChange]);
 
   async function handleCopy() {
-    if (!postToolbar?.text) return;
+    const toolbar = postToolbar ?? postToolbarRef.current;
+    if (!toolbar?.text) return;
+
+    toolbarInteractionRef.current = false;
 
     try {
-      await navigator.clipboard.writeText(postToolbar.text);
+      await navigator.clipboard.writeText(toolbar.text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     } catch {
@@ -347,19 +400,24 @@ export function SelectionChrome() {
   }
 
   function handleExplain() {
-    if (!postToolbar) return;
+    const toolbar = postToolbar ?? postToolbarRef.current;
+    if (!toolbar) return;
 
-    const range = getActiveDocumentRange();
-    const postId = range ? getPostIdFromRange(range) : null;
+    const postId = postIdRef.current;
     if (!postId) return;
 
-    setShowToolbar(false);
-    setExplainSession({
+    const session: ExplainSession = {
       postId,
-      selectedText: postToolbar.text,
-      panelTop: postToolbar.panelTop,
-      panelLeft: postToolbar.panelLeft,
-    });
+      selectedText: toolbar.text,
+      panelTop: toolbar.panelTop,
+      panelLeft: toolbar.panelLeft,
+    };
+
+    pinExplainSessionRef.current = true;
+    toolbarInteractionRef.current = false;
+    explainSessionRef.current = session;
+    setShowToolbar(false);
+    setExplainSession(session);
   }
 
   const portalRoot =
@@ -409,22 +467,28 @@ export function SelectionChrome() {
             aria-label="Text selection actions"
           >
             <button
+              ref={explainTooltip.anchorRef}
               type="button"
               className="toolbar-icon-btn"
               aria-label="Explain selection with AI"
+              aria-describedby={explainTooltip.describedBy}
               onMouseDown={preventSelectionCollapse}
               onClick={handleExplain}
+              {...explainTooltip.handlers}
             >
               <span className="toolbar-icon-glyph toolbar-insight-icon" aria-hidden>
                 <SparkIcon className="h-3.5 w-3.5" />
               </span>
             </button>
             <button
+              ref={copyTooltip.anchorRef}
               type="button"
               className="toolbar-icon-btn"
               aria-label={copied ? "Copied" : "Copy selection"}
+              aria-describedby={copyTooltip.describedBy}
               onMouseDown={preventSelectionCollapse}
               onClick={handleCopy}
+              {...copyTooltip.handlers}
             >
               <span className="toolbar-icon-glyph" aria-hidden>
                 <CopyIcon className="h-3.5 w-3.5" />
@@ -437,6 +501,14 @@ export function SelectionChrome() {
           portalRoot
         )
       : null;
+
+  const selectionTooltipPortals =
+    typeof document !== "undefined" ? (
+      <>
+        {explainTooltip.tooltipPortal}
+        {copyTooltip.tooltipPortal}
+      </>
+    ) : null;
 
   const explainPortal =
     portalRoot && explainSession
@@ -461,6 +533,7 @@ export function SelectionChrome() {
       {panelHighlightPortal}
       {fixedHighlightPortal}
       {toolbarPortal}
+      {selectionTooltipPortals}
       {explainPortal}
     </>
   );
