@@ -60,6 +60,7 @@ html.dark {
 }
 
 body {
+  position: relative;
   background: var(--color-coffee-bg);
   color: var(--color-coffee-text);
   -webkit-font-smoothing: antialiased;
@@ -97,6 +98,7 @@ button:disabled {
 }
 
 .feed-scroll {
+  position: relative;
   scroll-snap-type: y proximity;
 }
 
@@ -847,15 +849,17 @@ button:disabled {
 }
 
 .selection-highlight-layer {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   z-index: 40;
   pointer-events: none;
   overflow: visible;
 }
 
 .selection-highlight {
-  position: fixed;
+  position: absolute;
   border-radius: 2px;
   background: var(--color-selection-bg-strong);
 }
@@ -1031,7 +1035,7 @@ button:disabled {
 }
 
 .post-selection-toolbar {
-  position: fixed;
+  position: absolute;
   z-index: 100;
   pointer-events: auto;
   animation: post-selection-toolbar-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;

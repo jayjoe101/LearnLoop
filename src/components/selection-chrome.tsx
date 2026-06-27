@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CopyIcon, SparkIcon } from "@/components/icons";
 import {
+  getSelectionPortalRoot,
   readDocumentSelection,
   readPostToolbarSelection,
   setSelectionHighlightActive,
@@ -13,6 +14,17 @@ import {
 
 const TOOLBAR_WIDTH = 72;
 const TOOLBAR_OFFSET = 8;
+
+function isPostSelectableArea(target: Node) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        ".post-text-selection, [data-post-selectable], [data-post-body-content]"
+      )
+    )
+  );
+}
 
 function shouldIgnoreOutsidePointer(target: Node) {
   return (
@@ -163,11 +175,6 @@ export function SelectionChrome() {
       }
     };
 
-    const onScroll = () => {
-      if (!highlightRef.current) return;
-      queueSync({ finalizeToolbar: showToolbarRef.current });
-    };
-
     const onResize = () => {
       if (!highlightRef.current) return;
       queueSync({ finalizeToolbar: showToolbarRef.current });
@@ -177,7 +184,6 @@ export function SelectionChrome() {
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("selectionchange", onSelectionChange);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
 
     return () => {
@@ -186,7 +192,6 @@ export function SelectionChrome() {
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("selectionchange", onSelectionChange);
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
       setSelectionHighlightActive(false);
     };
@@ -211,7 +216,7 @@ export function SelectionChrome() {
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (toolbarRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest(".post-text-selection")) {
+      if (isPostSelectableArea(target)) {
         return;
       }
       if (shouldIgnoreOutsidePointer(target)) return;
@@ -235,8 +240,11 @@ export function SelectionChrome() {
     }
   }
 
+  const portalRoot =
+    typeof document !== "undefined" ? getSelectionPortalRoot() : null;
+
   const highlightPortal =
-    highlight && highlight.rects.length > 0 && typeof document !== "undefined"
+    portalRoot && highlight && highlight.rects.length > 0
       ? createPortal(
           <div className="selection-highlight-layer" aria-hidden>
             {highlight.rects.map((rect, index) => (
@@ -252,19 +260,19 @@ export function SelectionChrome() {
               />
             ))}
           </div>,
-          document.body
+          portalRoot
         )
       : null;
 
   const toolbarPortal =
-    showToolbar && postToolbar && typeof document !== "undefined"
+    portalRoot && showToolbar && postToolbar
       ? createPortal(
           <div
             ref={toolbarRef}
             className="post-selection-toolbar toolbar-icon-group"
             style={{
-              top: Math.max(8, postToolbar.toolbarTop - 36),
-              left: Math.max(8, postToolbar.toolbarLeft),
+              top: postToolbar.toolbarTop - 36,
+              left: postToolbar.toolbarLeft,
             }}
             role="toolbar"
             aria-label="Text selection actions"
@@ -295,7 +303,7 @@ export function SelectionChrome() {
               {copied ? "Copied to clipboard" : ""}
             </span>
           </div>,
-          document.body
+          portalRoot
         )
       : null;
 

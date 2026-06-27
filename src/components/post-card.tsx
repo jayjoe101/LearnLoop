@@ -134,7 +134,9 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
       ) : null}
 
       <div className="post-content-after-image">
-        <h2 className="post-title">{post.title}</h2>
+        <h2 className="post-title" data-post-selectable>
+          {post.title}
+        </h2>
 
         <PostBody
           body={post.body}

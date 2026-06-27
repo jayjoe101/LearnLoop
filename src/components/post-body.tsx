@@ -239,16 +239,18 @@ export function PostBody({
   return (
     <PostTextSelection>
     <div className="post-prose" data-post-prose>
-      {blocks.map((block, index) => {
-        const node = renderBlock(
-          block,
-          index,
-          wikiSource,
-          block.type === "paragraph" ? paragraphIndex : -1
-        );
-        if (block.type === "paragraph") paragraphIndex += 1;
-        return node;
-      })}
+      <div data-post-body-content>
+        {blocks.map((block, index) => {
+          const node = renderBlock(
+            block,
+            index,
+            wikiSource,
+            block.type === "paragraph" ? paragraphIndex : -1
+          );
+          if (block.type === "paragraph") paragraphIndex += 1;
+          return node;
+        })}
+      </div>
 
       {sourceLinks.length > 0 && (
         <div className="post-sources">

@@ -23,6 +23,31 @@ export type PostToolbarSelection = DocumentSelection & {
   toolbarLeft: number;
 };
 
+export function getSelectionPortalRoot(): HTMLElement {
+  return document.querySelector<HTMLElement>(".feed-scroll") ?? document.body;
+}
+
+export function clientRectsToPortalRects(rects: HighlightRect[]): HighlightRect[] {
+  const root = getSelectionPortalRoot();
+
+  if (root === document.body) {
+    return rects.map((rect) => ({
+      top: rect.top + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width,
+      height: rect.height,
+    }));
+  }
+
+  const rootRect = root.getBoundingClientRect();
+  return rects.map((rect) => ({
+    top: rect.top - rootRect.top + root.scrollTop,
+    left: rect.left - rootRect.left + root.scrollLeft,
+    width: rect.width,
+    height: rect.height,
+  }));
+}
+
 export function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
   if (rects.length === 0) return [];
 
@@ -93,7 +118,7 @@ export function getRangeHighlightRects(range: Range): HighlightRect[] {
       bottom: rect.bottom,
     }));
 
-  return mergeSelectionRects(relative);
+  return clientRectsToPortalRects(mergeSelectionRects(relative));
 }
 
 export function getBoundsFromRects(rects: HighlightRect[]) {
@@ -145,17 +170,49 @@ export function rangeIntersectsElement(range: Range, element: HTMLElement): bool
   }
 }
 
-export function getPostProseElements(): HTMLElement[] {
-  const seen = new Set<HTMLElement>();
-  const matches = document.querySelectorAll<HTMLElement>(
-    "[data-post-prose], .post-text-selection .post-prose"
+export function getAllowedToolbarElements(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "[data-post-selectable], [data-post-body-content]"
+    )
   );
+}
 
-  for (const element of matches) {
-    seen.add(element);
+function isNodeWithinAllowed(node: Node, allowed: HTMLElement[]): boolean {
+  return allowed.some((element) => element.contains(node));
+}
+
+function getPostCardForNode(node: Node): HTMLElement | null {
+  const element =
+    node.nodeType === Node.TEXT_NODE
+      ? node.parentElement
+      : (node as Element | null);
+
+  return element?.closest<HTMLElement>(".post-card") ?? null;
+}
+
+export function selectionIsEligibleForPostToolbar(range: Range): boolean {
+  const allowed = getAllowedToolbarElements();
+  if (allowed.length === 0) return false;
+
+  const intersectsAllowed = allowed.some((element) =>
+    rangeIntersectsElement(range, element)
+  );
+  if (!intersectsAllowed) return false;
+
+  if (!isNodeWithinAllowed(range.startContainer, allowed)) return false;
+  if (!isNodeWithinAllowed(range.endContainer, allowed)) return false;
+
+  const startCard = getPostCardForNode(range.startContainer);
+  const endCard = getPostCardForNode(range.endContainer);
+  if (!startCard || !endCard || startCard !== endCard) return false;
+
+  const sources = startCard.querySelector<HTMLElement>(".post-sources");
+  if (sources && rangeIntersectsElement(range, sources)) {
+    return false;
   }
 
-  return Array.from(seen);
+  return true;
 }
 
 export function readDocumentSelection(): DocumentSelection | null {
@@ -178,27 +235,21 @@ export function readPostToolbarSelection(
   const range = getActiveDocumentRange();
   if (!range) return null;
 
+  if (!selectionIsEligibleForPostToolbar(range)) return null;
+
   const text = window.getSelection()?.toString() ?? "";
   if (!text.trim()) return null;
 
-  const proseElements = getPostProseElements();
+  const rects = getRangeHighlightRects(range);
+  if (rects.length === 0) return null;
 
-  for (const prose of proseElements) {
-    if (!rangeIntersectsElement(range, prose)) continue;
-
-    const rects = getRangeHighlightRects(range);
-    if (rects.length === 0) return null;
-
-    const bounds = getBoundsFromRects(rects);
-    return {
-      text,
-      rects,
-      toolbarTop: bounds.top - toolbarOffset,
-      toolbarLeft: bounds.right - toolbarWidth,
-    };
-  }
-
-  return null;
+  const bounds = getBoundsFromRects(rects);
+  return {
+    text,
+    rects,
+    toolbarTop: bounds.top - toolbarOffset,
+    toolbarLeft: bounds.right - toolbarWidth,
+  };
 }
 
 export function setSelectionHighlightActive(active: boolean) {
