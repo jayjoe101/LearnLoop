@@ -49,6 +49,7 @@ export function SelectionChrome() {
   const [highlight, setHighlight] = useState<DocumentSelection | null>(null);
   const [postToolbar, setPostToolbar] = useState<PostToolbarSelection | null>(null);
   const [showToolbar, setShowToolbar] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(false);
   const [copied, setCopied] = useState(false);
 
   highlightRef.current = highlight;
@@ -59,6 +60,7 @@ export function SelectionChrome() {
     setPostToolbar(null);
     setShowToolbar(false);
     setCopied(false);
+    setIsSelecting(false);
     setSelectionHighlightActive(false);
     shouldFinalizeToolbarRef.current = false;
   }, []);
@@ -144,12 +146,14 @@ export function SelectionChrome() {
 
       isPointerDownRef.current = true;
       shouldFinalizeToolbarRef.current = false;
+      setIsSelecting(true);
       setShowToolbar(false);
       setCopied(false);
     };
 
     const onPointerUp = () => {
       isPointerDownRef.current = false;
+      setIsSelecting(false);
       queueSync({ finalizeToolbar: true });
     };
 
@@ -246,10 +250,17 @@ export function SelectionChrome() {
   const highlightPortal =
     portalRoot && highlight && highlight.rects.length > 0
       ? createPortal(
-          <div className="selection-highlight-layer" aria-hidden>
-            {highlight.rects.map((rect, index) => (
+          <div
+            className={
+              isSelecting
+                ? "selection-highlight-layer selection-highlight-layer--selecting"
+                : "selection-highlight-layer"
+            }
+            aria-hidden
+          >
+            {highlight.rects.map((rect) => (
               <div
-                key={index}
+                key={`${Math.round(rect.top)}-${Math.round(rect.left)}-${Math.round(rect.width)}-${Math.round(rect.height)}`}
                 className="selection-highlight"
                 style={{
                   top: rect.top,

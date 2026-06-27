@@ -39,9 +39,6 @@ function WikiTermLink({
       title={`Read about ${term} on ${source === "grokipedia" ? "Grokipedia" : "Wikipedia"}`}
     >
       {term}
-      <span className="post-wiki-link-icon" aria-hidden>
-        ↗
-      </span>
     </a>
   );
 }

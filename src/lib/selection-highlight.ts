@@ -1,5 +1,6 @@
 export const SELECTION_LINE_TOLERANCE_PX = 4;
 export const SELECTION_MERGE_GAP_PX = 12;
+export const SELECTION_MAX_LINE_HEIGHT_PX = 36;
 
 export type HighlightRect = {
   top: number;
@@ -48,6 +49,45 @@ export function clientRectsToPortalRects(rects: HighlightRect[]): HighlightRect[
   }));
 }
 
+function splitTallRect(rect: RelativeRect): RelativeRect[] {
+  if (rect.height <= SELECTION_MAX_LINE_HEIGHT_PX * 1.1) {
+    return [rect];
+  }
+
+  const slices: RelativeRect[] = [];
+  let top = rect.top;
+
+  while (top < rect.bottom - 0.5) {
+    const height = Math.min(SELECTION_MAX_LINE_HEIGHT_PX, rect.bottom - top);
+    slices.push({
+      top,
+      left: rect.left,
+      width: rect.width,
+      height,
+      right: rect.left + rect.width,
+      bottom: top + height,
+    });
+    top += height;
+  }
+
+  return slices;
+}
+
+function normalizeSelectionRects(relative: RelativeRect[]): RelativeRect[] {
+  const lineLike = relative.filter(
+    (rect) => rect.height <= SELECTION_MAX_LINE_HEIGHT_PX * 1.25
+  );
+  const blockLike = relative.filter(
+    (rect) => rect.height > SELECTION_MAX_LINE_HEIGHT_PX * 1.25
+  );
+
+  if (lineLike.length > 0) {
+    return lineLike;
+  }
+
+  return blockLike.flatMap(splitTallRect);
+}
+
 export function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
   if (rects.length === 0) return [];
 
@@ -74,22 +114,22 @@ export function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
 
       if (gap <= SELECTION_MERGE_GAP_PX) {
         const right = Math.max(current.right, next.right);
-        const bottom = Math.max(current.bottom, next.bottom);
         const top = Math.min(current.top, next.top);
+        const height = Math.max(current.height, next.height);
         current = {
           top,
           left: current.left,
           width: right - current.left,
-          height: bottom - top,
+          height,
           right,
-          bottom,
+          bottom: top + height,
         };
       } else {
         merged.push({
           top: current.top,
           left: current.left,
           width: current.width,
-          height: current.bottom - current.top,
+          height: current.height,
         });
         current = { ...next };
       }
@@ -99,7 +139,7 @@ export function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
       top: current.top,
       left: current.left,
       width: current.width,
-      height: current.bottom - current.top,
+      height: current.height,
     });
   }
 
@@ -118,7 +158,8 @@ export function getRangeHighlightRects(range: Range): HighlightRect[] {
       bottom: rect.bottom,
     }));
 
-  return clientRectsToPortalRects(mergeSelectionRects(relative));
+  const normalized = normalizeSelectionRects(relative);
+  return clientRectsToPortalRects(mergeSelectionRects(normalized));
 }
 
 export function getBoundsFromRects(rects: HighlightRect[]) {
