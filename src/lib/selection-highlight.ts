@@ -146,6 +146,36 @@ export function mergeSelectionRects(rects: RelativeRect[]): HighlightRect[] {
   return merged;
 }
 
+function isSubsumedHighlightRect(small: RelativeRect, large: RelativeRect): boolean {
+  if (small === large) return false;
+
+  const smallArea = small.width * small.height;
+  const largeArea = large.width * large.height;
+  if (smallArea >= largeArea * 0.6) return false;
+
+  const verticalOverlap =
+    Math.min(small.bottom, large.bottom) - Math.max(small.top, large.top);
+  const horizontalOverlap =
+    Math.min(small.right, large.right) - Math.max(small.left, large.left);
+
+  const sharesLine =
+    Math.abs(small.top - large.top) <= SELECTION_LINE_TOLERANCE_PX + 10;
+
+  return (
+    sharesLine &&
+    verticalOverlap > small.height * 0.35 &&
+    horizontalOverlap > small.width * 0.45 &&
+    smallArea < largeArea
+  );
+}
+
+function removeSubsumedHighlightRects(rects: RelativeRect[]): RelativeRect[] {
+  return rects.filter(
+    (candidate) =>
+      !rects.some((other) => isSubsumedHighlightRect(candidate, other))
+  );
+}
+
 export function getRangeHighlightRects(range: Range): HighlightRect[] {
   const relative = Array.from(range.getClientRects())
     .filter((rect) => rect.width > 0.5 && rect.height > 0.5)
@@ -159,7 +189,16 @@ export function getRangeHighlightRects(range: Range): HighlightRect[] {
     }));
 
   const normalized = normalizeSelectionRects(relative);
-  return clientRectsToPortalRects(mergeSelectionRects(normalized));
+  const merged = mergeSelectionRects(normalized);
+  const deduped = removeSubsumedHighlightRects(
+    merged.map((rect) => ({
+      ...rect,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+    }))
+  );
+
+  return clientRectsToPortalRects(deduped);
 }
 
 export function getBoundsFromRects(rects: HighlightRect[]) {
