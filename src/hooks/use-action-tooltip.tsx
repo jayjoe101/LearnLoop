@@ -68,5 +68,5 @@ export function useActionTooltip({ label, placement = "below" }: Options) {
         )
       : null;
 
-  return { anchorRef, handlers, describedBy, tooltipPortal, tooltipId };
+  return { anchorRef, handlers, describedBy, tooltipPortal, tooltipId, hide };
 }

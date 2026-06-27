@@ -161,7 +161,6 @@ export function SelectionExplainPanel({
           className="selection-explain-panel__input"
           placeholder="Ask a follow-up…"
           value={draft}
-          onMouseDown={(event) => event.preventDefault()}
           onChange={(event) => setDraft(event.target.value)}
           disabled={thinking || sending}
         />

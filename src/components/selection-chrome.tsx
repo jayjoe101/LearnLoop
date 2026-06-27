@@ -25,6 +25,7 @@ type ExplainSession = {
   selectedText: string;
   panelTop: number;
   panelLeft: number;
+  pinnedHighlight: DocumentSelection;
 };
 
 function isPostSelectableArea(target: Node) {
@@ -107,14 +108,15 @@ export function SelectionChrome() {
   const [showToolbar, setShowToolbar] = useState(false);
   const [copied, setCopied] = useState(false);
   const [explainSession, setExplainSession] = useState<ExplainSession | null>(null);
+  const [panelHighlight, setPanelHighlight] = useState<DocumentSelection | null>(null);
 
   const explainTooltip = useActionTooltip({
     label: "Explain selection",
-    placement: "below",
+    placement: "above",
   });
   const copyTooltip = useActionTooltip({
     label: copied ? "Copied" : "Copy",
-    placement: "below",
+    placement: "above",
   });
 
   highlightRef.current = highlight;
@@ -128,6 +130,7 @@ export function SelectionChrome() {
     setShowToolbar(false);
     setCopied(false);
     setExplainSession(null);
+    setPanelHighlight(null);
     explainSessionRef.current = null;
     postIdRef.current = null;
     pinExplainSessionRef.current = false;
@@ -137,8 +140,30 @@ export function SelectionChrome() {
     suppressSelectionClearRef.current = false;
   }, []);
 
+  const dismissExplainSession = useCallback(() => {
+    setExplainSession(null);
+    setPanelHighlight(null);
+    explainSessionRef.current = null;
+    pinExplainSessionRef.current = false;
+  }, []);
+
   const runSync = useCallback(() => {
+    const range = getActiveDocumentRange();
+    const inExplainPanel = range ? rangeIsWithinExplainPanel(range) : false;
     const next = readDocumentSelection();
+
+    if (explainSessionRef.current) {
+      if (inExplainPanel) {
+        setPanelHighlight(next);
+        setSelectionHighlightActive(true);
+        return;
+      }
+
+      if (!shouldFinalizeToolbarRef.current) {
+        return;
+      }
+    }
+
     if (!next) {
       if (
         suppressSelectionClearRef.current ||
@@ -152,57 +177,44 @@ export function SelectionChrome() {
       return;
     }
 
-    setHighlight(next);
-    setSelectionHighlightActive(true);
-
     if (!shouldFinalizeToolbarRef.current) {
+      if (!explainSessionRef.current) {
+        setHighlight(next);
+        setSelectionHighlightActive(true);
+      }
       return;
     }
 
     const finalized = shouldFinalizeToolbarRef.current;
     shouldFinalizeToolbarRef.current = false;
 
-    const range = getActiveDocumentRange();
-    const inExplainPanel = range ? rangeIsWithinExplainPanel(range) : false;
     const toolbarSelection = readPostToolbarSelection(
       TOOLBAR_OFFSET,
       TOOLBAR_WIDTH
     );
 
+    if (explainSessionRef.current && finalized && !pinExplainSessionRef.current) {
+      dismissExplainSession();
+    }
+    pinExplainSessionRef.current = false;
+
+    setHighlight(next);
+    setSelectionHighlightActive(true);
+    setPanelHighlight(null);
     setPostToolbar(toolbarSelection);
 
     if (toolbarSelection && range) {
       postIdRef.current = getPostIdFromRange(range);
     }
 
-    if (inExplainPanel) {
-      setShowToolbar(false);
-      setCopied(false);
-      return;
-    }
-
     if (toolbarSelection) {
-      if (
-        explainSessionRef.current &&
-        finalized &&
-        !pinExplainSessionRef.current
-      ) {
-        setExplainSession(null);
-        explainSessionRef.current = null;
-      }
-      pinExplainSessionRef.current = false;
-      setShowToolbar(!explainSessionRef.current);
+      setShowToolbar(true);
       return;
     }
 
     setShowToolbar(false);
     setCopied(false);
-    if (explainSessionRef.current && finalized && !pinExplainSessionRef.current) {
-      setExplainSession(null);
-      explainSessionRef.current = null;
-    }
-    pinExplainSessionRef.current = false;
-  }, [clearChrome]);
+  }, [clearChrome, dismissExplainSession]);
 
   const queueSync = useCallback(
     (options: { finalizeToolbar?: boolean } = {}) => {
@@ -288,7 +300,6 @@ export function SelectionChrome() {
       suppressSelectionClearRef.current = false;
       setShowToolbar(false);
       setCopied(false);
-      setExplainSession(null);
     };
 
     const onPointerUp = (event: PointerEvent) => {
@@ -303,7 +314,7 @@ export function SelectionChrome() {
 
       if (suppressSelectionClearRef.current && explainSessionRef.current) {
         suppressSelectionClearRef.current = false;
-        queueSync({ finalizeToolbar: true });
+        queueSync();
         return;
       }
 
@@ -326,7 +337,7 @@ export function SelectionChrome() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (explainSessionRef.current) {
-          setExplainSession(null);
+          dismissExplainSession();
           setShowToolbar(Boolean(postToolbarRef.current));
           return;
         }
@@ -369,7 +380,7 @@ export function SelectionChrome() {
       window.removeEventListener("resize", onResize);
       setSelectionHighlightActive(false);
     };
-  }, [clearChrome, queueSync]);
+  }, [clearChrome, dismissExplainSession, queueSync]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -384,10 +395,30 @@ export function SelectionChrome() {
     return () => observer.disconnect();
   }, [restoreAfterThemeChange]);
 
+  function restorePostHighlightFromToolbar() {
+    const toolbar = postToolbarRef.current;
+    if (!toolbar) return;
+
+    setHighlight({
+      text: toolbar.text,
+      feedRects: toolbar.feedRects,
+      fixedRects: toolbar.fixedRects,
+      panelRects: [],
+    });
+    setSelectionHighlightActive(true);
+  }
+
+  function handleCloseExplain() {
+    dismissExplainSession();
+    restorePostHighlightFromToolbar();
+    setShowToolbar(Boolean(postToolbarRef.current));
+  }
+
   async function handleCopy() {
     const toolbar = postToolbar ?? postToolbarRef.current;
     if (!toolbar?.text) return;
 
+    copyTooltip.hide();
     toolbarInteractionRef.current = false;
 
     try {
@@ -406,48 +437,71 @@ export function SelectionChrome() {
     const postId = postIdRef.current;
     if (!postId) return;
 
+    const pinnedHighlight: DocumentSelection = highlightRef.current ?? {
+      text: toolbar.text,
+      feedRects: toolbar.feedRects,
+      fixedRects: toolbar.fixedRects,
+      panelRects: [],
+    };
+
     const session: ExplainSession = {
       postId,
       selectedText: toolbar.text,
       panelTop: toolbar.panelTop,
       panelLeft: toolbar.panelLeft,
+      pinnedHighlight,
     };
 
+    explainTooltip.hide();
     pinExplainSessionRef.current = true;
     toolbarInteractionRef.current = false;
     explainSessionRef.current = session;
+    setPanelHighlight(null);
+    setHighlight(pinnedHighlight);
+    setSelectionHighlightActive(true);
     setShowToolbar(false);
     setExplainSession(session);
   }
+
+  const postHighlight = explainSession?.pinnedHighlight ?? highlight;
+  const activePanelHighlight = panelHighlight ?? null;
 
   const portalRoot =
     typeof document !== "undefined" ? getSelectionPortalRoot() : null;
 
   const feedHighlightPortal =
-    portalRoot && highlight && highlight.feedRects.length > 0
+    portalRoot && postHighlight && postHighlight.feedRects.length > 0
       ? createPortal(
           <div className="selection-highlight-layer" aria-hidden>
-            {renderHighlightRects(highlight.feedRects, "selection-highlight")}
+            {renderHighlightRects(postHighlight.feedRects, "selection-highlight")}
           </div>,
           portalRoot
         )
       : null;
 
   const panelHighlightPortal =
-    portalRoot && highlight && highlight.panelRects.length > 0
+    portalRoot && activePanelHighlight && activePanelHighlight.panelRects.length > 0
       ? createPortal(
           <div className="selection-highlight-layer selection-highlight-layer--panel" aria-hidden>
-            {renderHighlightRects(highlight.panelRects, "selection-highlight")}
+            {renderHighlightRects(
+              activePanelHighlight.panelRects,
+              "selection-highlight"
+            )}
           </div>,
           portalRoot
         )
       : null;
 
   const fixedHighlightPortal =
-    highlight && highlight.fixedRects.length > 0 && typeof document !== "undefined"
+    postHighlight &&
+    postHighlight.fixedRects.length > 0 &&
+    typeof document !== "undefined"
       ? createPortal(
           <div className="selection-highlight-layer selection-highlight-layer--fixed" aria-hidden>
-            {renderHighlightRects(highlight.fixedRects, "selection-highlight selection-highlight--fixed")}
+            {renderHighlightRects(
+              postHighlight.fixedRects,
+              "selection-highlight selection-highlight--fixed"
+            )}
           </div>,
           document.body
         )
@@ -518,10 +572,7 @@ export function SelectionChrome() {
             selectedText={explainSession.selectedText}
             top={explainSession.panelTop}
             left={explainSession.panelLeft}
-            onClose={() => {
-              setExplainSession(null);
-              setShowToolbar(Boolean(postToolbar));
-            }}
+            onClose={handleCloseExplain}
           />,
           portalRoot
         )
