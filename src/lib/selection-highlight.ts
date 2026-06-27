@@ -17,12 +17,14 @@ type RelativeRect = HighlightRect & {
 export type HighlightLayers = {
   feedRects: HighlightRect[];
   fixedRects: HighlightRect[];
+  panelRects: HighlightRect[];
 };
 
 export type DocumentSelection = {
   text: string;
   feedRects: HighlightRect[];
   fixedRects: HighlightRect[];
+  panelRects: HighlightRect[];
 };
 
 export type PostToolbarSelection = DocumentSelection & {
@@ -34,6 +36,30 @@ export type PostToolbarSelection = DocumentSelection & {
 
 export function getSelectionPortalRoot(): HTMLElement {
   return document.querySelector<HTMLElement>(".feed-scroll") ?? document.body;
+}
+
+function rectsIntersect(
+  a: { top: number; left: number; right: number; bottom: number },
+  b: DOMRect
+): boolean {
+  return !(
+    a.right < b.left ||
+    a.left > b.right ||
+    a.bottom < b.top ||
+    a.top > b.bottom
+  );
+}
+
+function isRectIntersectingHud(rect: RelativeRect): boolean {
+  const hud = document.querySelector<HTMLElement>(".feed-top-hud");
+  if (!hud) return false;
+  return rectsIntersect(rect, hud.getBoundingClientRect());
+}
+
+function isRectIntersectingExplainPanel(rect: RelativeRect): boolean {
+  const panel = document.querySelector<HTMLElement>(".selection-explain-panel");
+  if (!panel) return false;
+  return rectsIntersect(rect, panel.getBoundingClientRect());
 }
 
 function isRectInsideFeedScrollViewport(
@@ -232,13 +258,25 @@ export function buildHighlightLayers(range: Range): HighlightLayers {
     return {
       feedRects: clientRectsToPortalRects(clientRects),
       fixedRects: [],
+      panelRects: [],
     };
   }
 
   const feedClient: RelativeRect[] = [];
   const fixedClient: RelativeRect[] = [];
+  const panelClient: RelativeRect[] = [];
 
   for (const rect of clientRects) {
+    if (isRectIntersectingExplainPanel(rect)) {
+      panelClient.push(rect);
+      continue;
+    }
+
+    if (isRectIntersectingHud(rect)) {
+      fixedClient.push(rect);
+      continue;
+    }
+
     if (isRectInsideFeedScrollViewport(rect, feedScroll)) {
       feedClient.push(rect);
     } else {
@@ -254,7 +292,15 @@ export function buildHighlightLayers(range: Range): HighlightLayers {
       width: rect.width,
       height: rect.height,
     })),
+    panelRects: clientRectsToPortalRects(panelClient),
   };
+}
+
+export function rangeIsWithinExplainPanel(range: Range): boolean {
+  const panel = document.querySelector<HTMLElement>(".selection-explain-panel");
+  if (!panel) return false;
+
+  return panel.contains(range.startContainer) && panel.contains(range.endContainer);
 }
 
 export function getBoundsFromRects(rects: HighlightRect[]) {
@@ -364,7 +410,11 @@ export function readDocumentSelection(): DocumentSelection | null {
   if (!text.trim()) return null;
 
   const layers = buildHighlightLayers(range);
-  if (layers.feedRects.length === 0 && layers.fixedRects.length === 0) {
+  if (
+    layers.feedRects.length === 0 &&
+    layers.fixedRects.length === 0 &&
+    layers.panelRects.length === 0
+  ) {
     return null;
   }
 

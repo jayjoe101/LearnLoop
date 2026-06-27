@@ -8,6 +8,7 @@ import {
   getActiveDocumentRange,
   getPostIdFromRange,
   getSelectionPortalRoot,
+  rangeIsWithinExplainPanel,
   readDocumentSelection,
   readPostToolbarSelection,
   setSelectionHighlightActive,
@@ -132,15 +133,31 @@ export function SelectionChrome() {
       shouldFinalizeToolbarRef.current || !isPointerDownRef.current;
 
     if (wantsToolbar) {
+      const range = getActiveDocumentRange();
+      const inExplainPanel = range ? rangeIsWithinExplainPanel(range) : false;
       const toolbarSelection = readPostToolbarSelection(
         TOOLBAR_OFFSET,
         TOOLBAR_WIDTH
       );
+
       setPostToolbar(toolbarSelection);
-      setShowToolbar(Boolean(toolbarSelection) && !explainSessionRef.current);
       shouldFinalizeToolbarRef.current = false;
-      if (!toolbarSelection) {
+
+      if (inExplainPanel) {
+        setShowToolbar(false);
         setCopied(false);
+        return;
+      }
+
+      if (toolbarSelection) {
+        setExplainSession(null);
+        setShowToolbar(true);
+        return;
+      }
+
+      setShowToolbar(false);
+      setCopied(false);
+      if (explainSessionRef.current) {
         setExplainSession(null);
       }
       return;
@@ -202,6 +219,8 @@ export function SelectionChrome() {
         target instanceof Element &&
         target.closest(".selection-explain-panel")
       ) {
+        isPointerDownRef.current = true;
+        shouldFinalizeToolbarRef.current = false;
         suppressSelectionClearRef.current = true;
         return;
       }
@@ -218,7 +237,6 @@ export function SelectionChrome() {
         suppressSelectionClearRef.current = false;
         setShowToolbar(false);
         setCopied(false);
-        setExplainSession(null);
         return;
       }
 
@@ -233,9 +251,15 @@ export function SelectionChrome() {
     const onPointerUp = () => {
       isPointerDownRef.current = false;
 
+      if (suppressSelectionClearRef.current && explainSessionRef.current) {
+        suppressSelectionClearRef.current = false;
+        queueSync({ finalizeToolbar: true });
+        return;
+      }
+
       if (suppressSelectionClearRef.current && highlightRef.current) {
         suppressSelectionClearRef.current = false;
-        if (!explainSessionRef.current && postToolbarRef.current) {
+        if (postToolbarRef.current) {
           setShowToolbar(true);
         }
         return;
@@ -351,6 +375,16 @@ export function SelectionChrome() {
         )
       : null;
 
+  const panelHighlightPortal =
+    portalRoot && highlight && highlight.panelRects.length > 0
+      ? createPortal(
+          <div className="selection-highlight-layer selection-highlight-layer--panel" aria-hidden>
+            {renderHighlightRects(highlight.panelRects, "selection-highlight")}
+          </div>,
+          portalRoot
+        )
+      : null;
+
   const fixedHighlightPortal =
     highlight && highlight.fixedRects.length > 0 && typeof document !== "undefined"
       ? createPortal(
@@ -424,6 +458,7 @@ export function SelectionChrome() {
   return (
     <>
       {feedHighlightPortal}
+      {panelHighlightPortal}
       {fixedHighlightPortal}
       {toolbarPortal}
       {explainPortal}
