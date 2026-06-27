@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CopyIcon, SparkIcon } from "@/components/icons";
+import { SelectionExplainPanel } from "@/components/selection-explain-panel";
 import {
+  getActiveDocumentRange,
+  getPostIdFromRange,
   getSelectionPortalRoot,
   readDocumentSelection,
   readPostToolbarSelection,
@@ -15,12 +18,19 @@ import {
 const TOOLBAR_WIDTH = 72;
 const TOOLBAR_OFFSET = 8;
 
+type ExplainSession = {
+  postId: string;
+  selectedText: string;
+  panelTop: number;
+  panelLeft: number;
+};
+
 function isPostSelectableArea(target: Node) {
   return (
     target instanceof Element &&
     Boolean(
       target.closest(
-        ".post-text-selection, [data-post-selectable], [data-post-body-content]"
+        ".post-text-selection, [data-post-selectable], [data-post-body-content], .selection-explain-panel"
       )
     )
   );
@@ -37,6 +47,21 @@ function preventSelectionCollapse(event: React.MouseEvent) {
   event.preventDefault();
 }
 
+function renderHighlightRects(rects: DocumentSelection["feedRects"], className: string) {
+  return rects.map((rect, index) => (
+    <div
+      key={index}
+      className={className}
+      style={{
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      }}
+    />
+  ));
+}
+
 export function SelectionChrome() {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const liveId = useId();
@@ -50,6 +75,7 @@ export function SelectionChrome() {
   const [postToolbar, setPostToolbar] = useState<PostToolbarSelection | null>(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [explainSession, setExplainSession] = useState<ExplainSession | null>(null);
 
   highlightRef.current = highlight;
   showToolbarRef.current = showToolbar;
@@ -59,6 +85,7 @@ export function SelectionChrome() {
     setPostToolbar(null);
     setShowToolbar(false);
     setCopied(false);
+    setExplainSession(null);
     setSelectionHighlightActive(false);
     shouldFinalizeToolbarRef.current = false;
   }, []);
@@ -82,17 +109,18 @@ export function SelectionChrome() {
         TOOLBAR_WIDTH
       );
       setPostToolbar(toolbarSelection);
-      setShowToolbar(Boolean(toolbarSelection));
+      setShowToolbar(Boolean(toolbarSelection) && !explainSession);
       shouldFinalizeToolbarRef.current = false;
       if (!toolbarSelection) {
         setCopied(false);
+        setExplainSession(null);
       }
       return;
     }
 
     setShowToolbar(false);
     setCopied(false);
-  }, [clearChrome]);
+  }, [clearChrome, explainSession]);
 
   const queueSync = useCallback(
     (options: { finalizeToolbar?: boolean } = {}) => {
@@ -128,16 +156,20 @@ export function SelectionChrome() {
     const toolbarSelection = readPostToolbarSelection(TOOLBAR_OFFSET, TOOLBAR_WIDTH);
     if (toolbarSelection) {
       setPostToolbar(toolbarSelection);
-      setShowToolbar(true);
+      if (!explainSession) {
+        setShowToolbar(true);
+      }
     }
-  }, []);
+  }, [explainSession]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (
         target instanceof Element &&
-        target.closest(".post-selection-toolbar, .feed-header-controls")
+        target.closest(
+          ".post-selection-toolbar, .feed-header-controls, .selection-explain-panel"
+        )
       ) {
         return;
       }
@@ -146,6 +178,7 @@ export function SelectionChrome() {
       shouldFinalizeToolbarRef.current = false;
       setShowToolbar(false);
       setCopied(false);
+      setExplainSession(null);
     };
 
     const onPointerUp = () => {
@@ -159,6 +192,11 @@ export function SelectionChrome() {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (explainSession) {
+          setExplainSession(null);
+          setShowToolbar(Boolean(postToolbar));
+          return;
+        }
         clearChrome();
         window.getSelection()?.removeAllRanges();
         return;
@@ -177,7 +215,7 @@ export function SelectionChrome() {
 
     const onResize = () => {
       if (!highlightRef.current) return;
-      queueSync({ finalizeToolbar: showToolbarRef.current });
+      queueSync({ finalizeToolbar: showToolbarRef.current || Boolean(explainSession) });
     };
 
     document.addEventListener("pointerdown", onPointerDown);
@@ -195,7 +233,7 @@ export function SelectionChrome() {
       window.removeEventListener("resize", onResize);
       setSelectionHighlightActive(false);
     };
-  }, [clearChrome, queueSync]);
+  }, [clearChrome, explainSession, postToolbar, queueSync]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -211,22 +249,22 @@ export function SelectionChrome() {
   }, [restoreAfterThemeChange]);
 
   useEffect(() => {
-    if (!showToolbar) return;
+    if (!showToolbar && !explainSession) return;
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (toolbarRef.current?.contains(target)) return;
-      if (isPostSelectableArea(target)) {
-        return;
-      }
+      if (target instanceof Element && target.closest(".selection-explain-panel")) return;
+      if (isPostSelectableArea(target)) return;
       if (shouldIgnoreOutsidePointer(target)) return;
       setShowToolbar(false);
       setCopied(false);
+      setExplainSession(null);
     };
 
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [showToolbar]);
+  }, [explainSession, showToolbar]);
 
   async function handleCopy() {
     if (!postToolbar?.text) return;
@@ -240,27 +278,42 @@ export function SelectionChrome() {
     }
   }
 
+  function handleExplain() {
+    if (!postToolbar) return;
+
+    const range = getActiveDocumentRange();
+    const postId = range ? getPostIdFromRange(range) : null;
+    if (!postId) return;
+
+    setShowToolbar(false);
+    setExplainSession({
+      postId,
+      selectedText: postToolbar.text,
+      panelTop: postToolbar.panelTop,
+      panelLeft: postToolbar.panelLeft,
+    });
+  }
+
   const portalRoot =
     typeof document !== "undefined" ? getSelectionPortalRoot() : null;
 
-  const highlightPortal =
-    portalRoot && highlight && highlight.rects.length > 0
+  const feedHighlightPortal =
+    portalRoot && highlight && highlight.feedRects.length > 0
       ? createPortal(
           <div className="selection-highlight-layer" aria-hidden>
-            {highlight.rects.map((rect, index) => (
-              <div
-                key={index}
-                className="selection-highlight"
-                style={{
-                  top: rect.top,
-                  left: rect.left,
-                  width: rect.width,
-                  height: rect.height,
-                }}
-              />
-            ))}
+            {renderHighlightRects(highlight.feedRects, "selection-highlight")}
           </div>,
           portalRoot
+        )
+      : null;
+
+  const fixedHighlightPortal =
+    highlight && highlight.fixedRects.length > 0 && typeof document !== "undefined"
+      ? createPortal(
+          <div className="selection-highlight-layer selection-highlight-layer--fixed" aria-hidden>
+            {renderHighlightRects(highlight.fixedRects, "selection-highlight selection-highlight--fixed")}
+          </div>,
+          document.body
         )
       : null;
 
@@ -280,11 +333,11 @@ export function SelectionChrome() {
             <button
               type="button"
               className="toolbar-icon-btn"
-              aria-label="Ask AI about selection (coming soon)"
-              disabled
+              aria-label="Explain selection with AI"
               onMouseDown={preventSelectionCollapse}
+              onClick={handleExplain}
             >
-              <span className="toolbar-icon-glyph" aria-hidden>
+              <span className="toolbar-icon-glyph toolbar-insight-icon" aria-hidden>
                 <SparkIcon className="h-3.5 w-3.5" />
               </span>
             </button>
@@ -307,10 +360,29 @@ export function SelectionChrome() {
         )
       : null;
 
+  const explainPortal =
+    portalRoot && explainSession
+      ? createPortal(
+          <SelectionExplainPanel
+            postId={explainSession.postId}
+            selectedText={explainSession.selectedText}
+            top={explainSession.panelTop}
+            left={explainSession.panelLeft}
+            onClose={() => {
+              setExplainSession(null);
+              setShowToolbar(Boolean(postToolbar));
+            }}
+          />,
+          portalRoot
+        )
+      : null;
+
   return (
     <>
-      {highlightPortal}
+      {feedHighlightPortal}
+      {fixedHighlightPortal}
       {toolbarPortal}
+      {explainPortal}
     </>
   );
 }

@@ -14,18 +14,42 @@ type RelativeRect = HighlightRect & {
   bottom: number;
 };
 
+export type HighlightLayers = {
+  feedRects: HighlightRect[];
+  fixedRects: HighlightRect[];
+};
+
 export type DocumentSelection = {
   text: string;
-  rects: HighlightRect[];
+  feedRects: HighlightRect[];
+  fixedRects: HighlightRect[];
 };
 
 export type PostToolbarSelection = DocumentSelection & {
   toolbarTop: number;
   toolbarLeft: number;
+  panelTop: number;
+  panelLeft: number;
 };
 
 export function getSelectionPortalRoot(): HTMLElement {
   return document.querySelector<HTMLElement>(".feed-scroll") ?? document.body;
+}
+
+function isRectInsideFeedScrollViewport(
+  rect: RelativeRect,
+  feedScroll: HTMLElement
+): boolean {
+  const rootRect = feedScroll.getBoundingClientRect();
+  const centerY = rect.top + rect.height / 2;
+  const centerX = rect.left + rect.width / 2;
+
+  return (
+    centerY >= rootRect.top &&
+    centerY <= rootRect.bottom &&
+    centerX >= rootRect.left &&
+    centerX <= rootRect.right
+  );
 }
 
 export function clientRectsToPortalRects(rects: HighlightRect[]): HighlightRect[] {
@@ -176,7 +200,7 @@ function removeSubsumedHighlightRects(rects: RelativeRect[]): RelativeRect[] {
   );
 }
 
-export function getRangeHighlightRects(range: Range): HighlightRect[] {
+function buildClientHighlightRects(range: Range): RelativeRect[] {
   const relative = Array.from(range.getClientRects())
     .filter((rect) => rect.width > 0.5 && rect.height > 0.5)
     .map((rect) => ({
@@ -190,15 +214,47 @@ export function getRangeHighlightRects(range: Range): HighlightRect[] {
 
   const normalized = normalizeSelectionRects(relative);
   const merged = mergeSelectionRects(normalized);
-  const deduped = removeSubsumedHighlightRects(
+
+  return removeSubsumedHighlightRects(
     merged.map((rect) => ({
       ...rect,
       right: rect.left + rect.width,
       bottom: rect.top + rect.height,
     }))
   );
+}
 
-  return clientRectsToPortalRects(deduped);
+export function buildHighlightLayers(range: Range): HighlightLayers {
+  const clientRects = buildClientHighlightRects(range);
+  const feedScroll = document.querySelector<HTMLElement>(".feed-scroll");
+
+  if (!feedScroll) {
+    return {
+      feedRects: clientRectsToPortalRects(clientRects),
+      fixedRects: [],
+    };
+  }
+
+  const feedClient: RelativeRect[] = [];
+  const fixedClient: RelativeRect[] = [];
+
+  for (const rect of clientRects) {
+    if (isRectInsideFeedScrollViewport(rect, feedScroll)) {
+      feedClient.push(rect);
+    } else {
+      fixedClient.push(rect);
+    }
+  }
+
+  return {
+    feedRects: clientRectsToPortalRects(feedClient),
+    fixedRects: fixedClient.map((rect) => ({
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    })),
+  };
 }
 
 export function getBoundsFromRects(rects: HighlightRect[]) {
@@ -262,13 +318,18 @@ function isNodeWithinAllowed(node: Node, allowed: HTMLElement[]): boolean {
   return allowed.some((element) => element.contains(node));
 }
 
-function getPostCardForNode(node: Node): HTMLElement | null {
+export function getPostCardForNode(node: Node): HTMLElement | null {
   const element =
     node.nodeType === Node.TEXT_NODE
       ? node.parentElement
       : (node as Element | null);
 
   return element?.closest<HTMLElement>(".post-card") ?? null;
+}
+
+export function getPostIdFromRange(range: Range): string | null {
+  const card = getPostCardForNode(range.startContainer);
+  return card?.dataset.postId ?? null;
 }
 
 export function selectionIsEligibleForPostToolbar(range: Range): boolean {
@@ -302,10 +363,12 @@ export function readDocumentSelection(): DocumentSelection | null {
   const text = window.getSelection()?.toString() ?? "";
   if (!text.trim()) return null;
 
-  const rects = getRangeHighlightRects(range);
-  if (rects.length === 0) return null;
+  const layers = buildHighlightLayers(range);
+  if (layers.feedRects.length === 0 && layers.fixedRects.length === 0) {
+    return null;
+  }
 
-  return { text, rects };
+  return { text, ...layers };
 }
 
 export function readPostToolbarSelection(
@@ -320,15 +383,17 @@ export function readPostToolbarSelection(
   const text = window.getSelection()?.toString() ?? "";
   if (!text.trim()) return null;
 
-  const rects = getRangeHighlightRects(range);
-  if (rects.length === 0) return null;
+  const layers = buildHighlightLayers(range);
+  if (layers.feedRects.length === 0) return null;
 
-  const bounds = getBoundsFromRects(rects);
+  const bounds = getBoundsFromRects(layers.feedRects);
   return {
     text,
-    rects,
+    ...layers,
     toolbarTop: bounds.top - toolbarOffset,
     toolbarLeft: bounds.right - toolbarWidth,
+    panelTop: bounds.bottom + 10,
+    panelLeft: bounds.left,
   };
 }
 

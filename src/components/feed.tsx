@@ -62,7 +62,7 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
     <div className="flex min-h-screen flex-1 flex-col animate-fade-in">
       <header className="feed-top-hud surface-panel sticky top-0 border-b">
         <div className="feed-header-bar mx-auto max-w-xl px-5 py-3 sm:max-w-2xl">
-          <div className="feed-header-brand min-w-0">
+          <div className="feed-header-brand min-w-0" data-feed-hud>
             <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-text)]">
               LearnLoop
             </h1>

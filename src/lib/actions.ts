@@ -15,6 +15,10 @@ import {
 } from "@/lib/generation-context";
 import { insertGeneratedPost } from "@/lib/insert-generated-post";
 import { attachPostImageSync } from "@/lib/post-images";
+import {
+  generateSelectionExplainReply,
+  type SelectionChatMessage,
+} from "@/lib/selection-explain";
 import { createClient } from "@/lib/supabase/server";
 import type { LiveSessionContext } from "@/lib/live-posting";
 
@@ -627,4 +631,45 @@ export async function refreshFeed() {
 
   await loadMorePosts(2);
   return { kept: keepIds.length };
+}
+
+export async function chatAboutSelection(input: {
+  postId: string;
+  selectedText: string;
+  messages: SelectionChatMessage[];
+}): Promise<{ content: string } | { error: string }> {
+  const selectedText = input.selectedText.trim();
+  if (!selectedText) {
+    return { error: "No text selected." };
+  }
+
+  try {
+    const { supabase, user } = await requireUser();
+    const { data: post, error } = await supabase
+      .from("posts")
+      .select("id, title, body, topic")
+      .eq("id", input.postId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !post) {
+      return { error: "Post not found." };
+    }
+
+    const content = await generateSelectionExplainReply({
+      title: post.title,
+      body: post.body,
+      topic: post.topic,
+      selectedText,
+      messages: input.messages,
+    });
+
+    if (!content?.trim()) {
+      return { error: "AI is unavailable right now. Try again shortly." };
+    }
+
+    return { content: content.trim() };
+  } catch {
+    return { error: "Something went wrong. Please try again." };
+  }
 }

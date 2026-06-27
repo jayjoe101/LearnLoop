@@ -98,6 +98,7 @@ export function PostCard({ post, interaction, feedStyle, index = 0 }: Props) {
   return (
     <article
       className="post-card group feed-post-enter"
+      data-post-id={post.id}
       style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
     >
       <PostAuthor
