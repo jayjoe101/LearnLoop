@@ -109,6 +109,7 @@ export function SelectionChrome() {
   const explainSessionRef = useRef<ExplainSession | null>(null);
   const pinExplainSessionRef = useRef(false);
   const toolbarInteractionRef = useRef(false);
+  const outsideExplainDismissRef = useRef(false);
 
   const [highlight, setHighlight] = useState<DocumentSelection | null>(null);
   const [postToolbar, setPostToolbar] = useState<PostToolbarSelection | null>(null);
@@ -142,6 +143,7 @@ export function SelectionChrome() {
     postIdRef.current = null;
     pinExplainSessionRef.current = false;
     toolbarInteractionRef.current = false;
+    outsideExplainDismissRef.current = false;
     setSelectionHighlightActive(false);
     shouldFinalizeToolbarRef.current = false;
     suppressSelectionClearRef.current = false;
@@ -168,6 +170,7 @@ export function SelectionChrome() {
   }, []);
 
   const closeExplainAndRestoreToolbar = useCallback(() => {
+    outsideExplainDismissRef.current = true;
     dismissExplainSession();
     restorePostHighlightFromToolbar();
     setShowToolbar(Boolean(postToolbarRef.current));
@@ -210,8 +213,12 @@ export function SelectionChrome() {
       if (
         suppressSelectionClearRef.current ||
         toolbarInteractionRef.current ||
-        pinExplainSessionRef.current
+        pinExplainSessionRef.current ||
+        outsideExplainDismissRef.current
       ) {
+        return;
+      }
+      if (postToolbarRef.current && highlightRef.current) {
         return;
       }
       clearChrome();
@@ -312,12 +319,10 @@ export function SelectionChrome() {
 
       if (
         explainSessionRef.current &&
+        !isExplainPanelTarget(target) &&
         !shouldIgnoreOutsidePointer(target)
       ) {
-        if (!isPostSelectableArea(target)) {
-          closeExplainAndRestoreToolbar();
-          window.getSelection()?.removeAllRanges();
-        }
+        closeExplainAndRestoreToolbar();
       }
 
       if (isPostSelectableArea(target)) {
@@ -352,19 +357,13 @@ export function SelectionChrome() {
 
       isPointerDownRef.current = false;
 
-      if (
-        explainSessionRef.current &&
-        !isExplainPanelTarget(target) &&
-        !shouldIgnoreOutsidePointer(target)
-      ) {
+      if (outsideExplainDismissRef.current) {
+        outsideExplainDismissRef.current = false;
         suppressSelectionClearRef.current = false;
-        queueSync({ finalizeToolbar: true });
-        return;
-      }
 
-      if (suppressSelectionClearRef.current && explainSessionRef.current) {
-        suppressSelectionClearRef.current = false;
-        queueSync();
+        if (isPostSelectableArea(target)) {
+          queueSync({ finalizeToolbar: true });
+        }
         return;
       }
 
