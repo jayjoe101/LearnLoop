@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { SparkIcon } from "@/components/icons";
 import { chatAboutSelection } from "@/lib/actions";
+import type { HighlightRect } from "@/lib/selection-highlight";
 import type { SelectionChatMessage } from "@/lib/selection-explain";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
   selectedText: string;
   top: number;
   left: number;
+  panelHighlightRects?: HighlightRect[];
   onClose: () => void;
 };
 
@@ -18,6 +20,7 @@ export function SelectionExplainPanel({
   selectedText,
   top,
   left,
+  panelHighlightRects = [],
   onClose,
 }: Props) {
   const [messages, setMessages] = useState<SelectionChatMessage[]>([]);
@@ -121,6 +124,20 @@ export function SelectionExplainPanel({
       </div>
 
       <div ref={bodyRef} className="selection-explain-panel__body">
+        {panelHighlightRects.map((rect, index) => (
+          <div
+            key={index}
+            className="selection-highlight selection-highlight--in-panel"
+            style={{
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+            }}
+            aria-hidden
+          />
+        ))}
+
         <p className="selection-explain-panel__quote">“{selectedText}”</p>
 
         {error && <p className="selection-explain-panel__error">{error}</p>}

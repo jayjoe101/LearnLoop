@@ -950,12 +950,19 @@ button:disabled {
 }
 
 .selection-explain-panel__body {
+  position: relative;
   max-height: 14rem;
   overflow-y: auto;
   padding: 0.7rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+}
+
+.selection-highlight--in-panel {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .selection-explain-panel__quote {

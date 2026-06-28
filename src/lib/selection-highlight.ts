@@ -38,6 +38,23 @@ export function getSelectionPortalRoot(): HTMLElement {
   return document.querySelector<HTMLElement>(".feed-scroll") ?? document.body;
 }
 
+export function getExplainPanelBody(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".selection-explain-panel__body");
+}
+
+export function clientRectsToPanelBodyRects(rects: HighlightRect[]): HighlightRect[] {
+  const body = getExplainPanelBody();
+  if (!body) return rects;
+
+  const bodyRect = body.getBoundingClientRect();
+  return rects.map((rect) => ({
+    top: rect.top - bodyRect.top + body.scrollTop,
+    left: rect.left - bodyRect.left + body.scrollLeft,
+    width: rect.width,
+    height: rect.height,
+  }));
+}
+
 function rectsIntersect(
   a: { top: number; left: number; right: number; bottom: number },
   b: DOMRect
@@ -292,7 +309,7 @@ export function buildHighlightLayers(range: Range): HighlightLayers {
       width: rect.width,
       height: rect.height,
     })),
-    panelRects: clientRectsToPortalRects(panelClient),
+    panelRects: clientRectsToPanelBodyRects(panelClient),
   };
 }
 
