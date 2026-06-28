@@ -145,6 +145,9 @@
   --shadow-action-hover: 0 3px 8px var(--color-shadow-ink);
   --shadow-chip-active: 0 1px 0 var(--color-highlight-inset) inset,
     0 2px 8px var(--color-shadow-ink);
+  --scrollbar-track: color-mix(in srgb, var(--color-coffee-elevated) 72%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--color-coffee-caramel) 48%, var(--color-coffee-mocha));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-coffee-caramel) 68%, var(--color-coffee-mocha));
 }
 
 .dark {
@@ -283,4 +286,7 @@
   --shadow-action-hover: 0 3px 8px var(--color-shadow-ink);
   --shadow-chip-active: 0 1px 0 var(--color-highlight-inset) inset,
     0 2px 8px var(--color-shadow-ink);
+  --scrollbar-track: color-mix(in srgb, var(--color-coffee-elevated) 55%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--color-coffee-taupe) 58%, var(--color-coffee-charcoal));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-coffee-honey) 42%, var(--color-coffee-charcoal));
 }

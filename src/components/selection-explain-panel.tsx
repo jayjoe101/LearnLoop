@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { SparkIcon } from "@/components/icons";
 import { chatAboutSelection } from "@/lib/actions";
 import type { HighlightRect } from "@/lib/selection-highlight";
 import type { SelectionChatMessage } from "@/lib/selection-explain";
@@ -12,7 +11,7 @@ type Props = {
   top: number;
   left: number;
   panelHighlightRects?: HighlightRect[];
-  onClose: () => void;
+  closing?: boolean;
 };
 
 export function SelectionExplainPanel({
@@ -21,7 +20,7 @@ export function SelectionExplainPanel({
   top,
   left,
   panelHighlightRects = [],
-  onClose,
+  closing = false,
 }: Props) {
   const [messages, setMessages] = useState<SelectionChatMessage[]>([]);
   const [thinking, setThinking] = useState(true);
@@ -98,31 +97,12 @@ export function SelectionExplainPanel({
 
   return (
     <div
-      className="selection-explain-panel"
+      className={`selection-explain-panel${closing ? " selection-explain-panel--closing" : ""}`}
       style={{ top, left }}
       role="dialog"
       aria-label="Explain selection"
+      aria-busy={thinking}
     >
-      <div className="selection-explain-panel__header">
-        <span
-          className={`selection-explain-panel__spark ${thinking ? "selection-explain-panel__spark--thinking" : ""}`}
-          aria-hidden
-        >
-          <SparkIcon className="h-3.5 w-3.5" />
-        </span>
-        <p className="selection-explain-panel__title">
-          {thinking ? "Thinking…" : "Explain selection"}
-        </p>
-        <button
-          type="button"
-          className="selection-explain-panel__close"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          ×
-        </button>
-      </div>
-
       <div ref={bodyRef} className="selection-explain-panel__body">
         {panelHighlightRects.map((rect, index) => (
           <div
@@ -164,7 +144,10 @@ export function SelectionExplainPanel({
         ))}
 
         {thinking && messages.length > 0 && (
-          <div className="selection-explain-thinking selection-explain-thinking--inline" aria-hidden>
+          <div
+            className="selection-explain-thinking selection-explain-thinking--inline"
+            aria-hidden
+          >
             <span />
             <span />
             <span />
@@ -175,7 +158,7 @@ export function SelectionExplainPanel({
       <form className="selection-explain-panel__form" onSubmit={handleFollowUp}>
         <input
           type="text"
-          className="selection-explain-panel__input"
+          className="selection-explain-panel__input ll-text-input"
           placeholder="Ask a follow-up…"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

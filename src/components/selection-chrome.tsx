@@ -19,6 +19,7 @@ import {
 
 const TOOLBAR_WIDTH = 72;
 const TOOLBAR_OFFSET = 8;
+const EXPLAIN_PANEL_EXIT_MS = 320;
 
 type ExplainSession = {
   postId: string;
@@ -91,6 +92,7 @@ export function SelectionChrome() {
   const pinExplainSessionRef = useRef(false);
   const toolbarInteractionRef = useRef(false);
   const outsideExplainDismissRef = useRef(false);
+  const explainCloseTimerRef = useRef(0);
 
   const [highlight, setHighlight] = useState<DocumentSelection | null>(null);
   const [postToolbar, setPostToolbar] = useState<PostToolbarSelection | null>(null);
@@ -98,6 +100,7 @@ export function SelectionChrome() {
   const [copied, setCopied] = useState(false);
   const [explainSession, setExplainSession] = useState<ExplainSession | null>(null);
   const [panelHighlight, setPanelHighlight] = useState<DocumentSelection | null>(null);
+  const [explainClosing, setExplainClosing] = useState(false);
 
   const explainTooltip = useActionTooltip({
     label: "Explain selection",
@@ -125,6 +128,8 @@ export function SelectionChrome() {
     pinExplainSessionRef.current = false;
     toolbarInteractionRef.current = false;
     outsideExplainDismissRef.current = false;
+    window.clearTimeout(explainCloseTimerRef.current);
+    setExplainClosing(false);
     setSelectionHighlightActive(false);
     shouldFinalizeToolbarRef.current = false;
     suppressSelectionClearRef.current = false;
@@ -151,11 +156,37 @@ export function SelectionChrome() {
   }, []);
 
   const closeExplainAndRestoreToolbar = useCallback(() => {
+    window.clearTimeout(explainCloseTimerRef.current);
+    setExplainClosing(false);
     outsideExplainDismissRef.current = true;
     dismissExplainSession();
     restorePostHighlightFromToolbar();
     setShowToolbar(Boolean(postToolbarRef.current));
   }, [dismissExplainSession, restorePostHighlightFromToolbar]);
+
+  const requestCloseExplain = useCallback(
+    (options: { animate?: boolean } = {}) => {
+      if (!explainSessionRef.current) return;
+      if (explainClosing) return;
+
+      const finish = () => {
+        window.clearTimeout(explainCloseTimerRef.current);
+        closeExplainAndRestoreToolbar();
+      };
+
+      if (options.animate === false) {
+        finish();
+        return;
+      }
+
+      setExplainClosing(true);
+      explainCloseTimerRef.current = window.setTimeout(
+        finish,
+        EXPLAIN_PANEL_EXIT_MS
+      );
+    },
+    [closeExplainAndRestoreToolbar, explainClosing]
+  );
 
   const runSync = useCallback(() => {
     const range = getActiveDocumentRange();
@@ -163,11 +194,13 @@ export function SelectionChrome() {
     const next = readDocumentSelection();
 
     if (explainSessionRef.current) {
-      if (inExplainPanel) {
+      if (inExplainPanel && next) {
         setPanelHighlight(next);
         setSelectionHighlightActive(true);
         return;
       }
+
+      setPanelHighlight(null);
 
       if (!shouldFinalizeToolbarRef.current) {
         return;
@@ -291,7 +324,6 @@ export function SelectionChrome() {
       if (isExplainPanelTarget(target)) {
         isPointerDownRef.current = true;
         shouldFinalizeToolbarRef.current = false;
-        suppressSelectionClearRef.current = true;
         return;
       }
 
@@ -300,7 +332,7 @@ export function SelectionChrome() {
         !isExplainPanelTarget(target) &&
         !shouldIgnoreOutsidePointer(target)
       ) {
-        closeExplainAndRestoreToolbar();
+        requestCloseExplain();
       }
 
       if (isPostSelectableArea(target)) {
@@ -356,7 +388,7 @@ export function SelectionChrome() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (explainSessionRef.current) {
-          closeExplainAndRestoreToolbar();
+          requestCloseExplain();
           return;
         }
         clearChrome();
@@ -398,7 +430,7 @@ export function SelectionChrome() {
       window.removeEventListener("resize", onResize);
       setSelectionHighlightActive(false);
     };
-  }, [clearChrome, closeExplainAndRestoreToolbar, queueSync]);
+  }, [clearChrome, queueSync, requestCloseExplain]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -412,10 +444,6 @@ export function SelectionChrome() {
 
     return () => observer.disconnect();
   }, [restoreAfterThemeChange]);
-
-  function handleCloseExplain() {
-    closeExplainAndRestoreToolbar();
-  }
 
   async function handleCopy() {
     const toolbar = postToolbar ?? postToolbarRef.current;
@@ -463,6 +491,7 @@ export function SelectionChrome() {
     setHighlight(pinnedHighlight);
     setSelectionHighlightActive(true);
     setShowToolbar(false);
+    setExplainClosing(false);
     setExplainSession(session);
   }
 
@@ -563,7 +592,7 @@ export function SelectionChrome() {
             top={explainSession.panelTop}
             left={explainSession.panelLeft}
             panelHighlightRects={activePanelHighlight?.panelRects ?? []}
-            onClose={handleCloseExplain}
+            closing={explainClosing}
           />,
           portalRoot
         )
