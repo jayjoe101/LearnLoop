@@ -57,25 +57,6 @@ function isExplainPanelTarget(target: Node) {
   );
 }
 
-function pointerIsInsideActiveSelection(event: PointerEvent) {
-  const range = getActiveDocumentRange();
-  if (!range) return false;
-
-  const { clientX, clientY } = event;
-  for (const rect of Array.from(range.getClientRects())) {
-    if (
-      clientX >= rect.left &&
-      clientX <= rect.right &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function preventSelectionCollapse(event: React.MouseEvent) {
   event.preventDefault();
 }
@@ -218,9 +199,6 @@ export function SelectionChrome() {
       ) {
         return;
       }
-      if (postToolbarRef.current && highlightRef.current) {
-        return;
-      }
       clearChrome();
       return;
     }
@@ -328,12 +306,6 @@ export function SelectionChrome() {
       if (isPostSelectableArea(target)) {
         isPointerDownRef.current = true;
         shouldFinalizeToolbarRef.current = false;
-
-        if (pointerIsInsideActiveSelection(event)) {
-          suppressSelectionClearRef.current = true;
-          return;
-        }
-
         suppressSelectionClearRef.current = false;
         setShowToolbar(false);
         setCopied(false);
@@ -367,11 +339,9 @@ export function SelectionChrome() {
         return;
       }
 
-      if (suppressSelectionClearRef.current && highlightRef.current) {
+      if (isExplainPanelTarget(target)) {
         suppressSelectionClearRef.current = false;
-        if (postToolbarRef.current) {
-          setShowToolbar(true);
-        }
+        queueSync();
         return;
       }
 
