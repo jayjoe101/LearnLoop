@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTopic, generateNewPost, removeTopic } from "@/lib/actions";
+import { generateNewPost } from "@/lib/actions";
 import { useLivePosting } from "@/hooks/use-live-posting";
 import { PostCard } from "@/components/post-card";
-import { PlusIcon, SparkIcon } from "@/components/icons";
+import { SparkIcon } from "@/components/icons";
+import { InterestsMenu } from "@/components/interests-menu";
 import { useActionTooltip } from "@/hooks/use-action-tooltip";
 import { NightNowButton } from "@/components/night-now-button";
 import type { FeedStyle, Post, PostInteraction, Topic } from "@/lib/types";
@@ -20,7 +21,6 @@ type Props = {
 type FeedFilter = "all" | "liked";
 
 export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Props) {
-  const [topicInput, setTopicInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [isGeneratingInsight, startGenerateInsight] = useTransition();
   const [filter, setFilter] = useState<FeedFilter>("all");
@@ -47,21 +47,10 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
       ? displayedPosts.filter((p) => interactions[p.id]?.liked)
       : displayedPosts.filter((p) => !interactions[p.id]?.not_interested);
 
-  function handleAddTopic(e: React.FormEvent) {
-    e.preventDefault();
-    const name = topicInput.trim();
-    if (!name) return;
-
-    startTransition(async () => {
-      await addTopic(name);
-      setTopicInput("");
-    });
-  }
-
   return (
-    <div className="flex min-h-screen flex-1 flex-col animate-fade-in">
+    <div className="feed-shell flex min-h-screen w-full flex-col animate-fade-in">
       <header className="feed-top-hud surface-panel sticky top-0 border-b">
-        <div className="feed-header-bar mx-auto max-w-xl px-5 py-3 sm:max-w-2xl">
+        <div className="feed-content-width feed-header-bar py-3">
           <div className="feed-header-brand min-w-0" data-feed-hud>
             <h1 className="text-sm font-semibold tracking-tight text-[var(--color-coffee-text)]">
               LearnLoop
@@ -89,6 +78,8 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
                 </button>
               ))}
             </nav>
+
+            <InterestsMenu topics={topics} />
 
             <div className="toolbar-icon-group">
               {filter === "all" && (
@@ -161,46 +152,10 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
             </button>
           </div>
         </div>
-
-        <div className="border-t border-[var(--color-border)] px-5 py-3 lg:hidden">
-          <div className="mx-auto flex max-w-xl flex-wrap gap-1.5 sm:max-w-2xl">
-            {topics.map((topic) => (
-              <button
-                key={topic.id}
-                type="button"
-                disabled={isPending}
-                aria-label={`Remove ${topic.name} from interests`}
-                onClick={() =>
-                  startTransition(async () => {
-                    await removeTopic(topic.id);
-                  })
-                }
-                className="chip-tactile btn-tactile"
-              >
-                {topic.name}
-              </button>
-            ))}
-            <form onSubmit={handleAddTopic} className="flex items-center gap-1">
-              <input
-                value={topicInput}
-                onChange={(e) => setTopicInput(e.target.value)}
-                placeholder="Topic"
-                className="onboarding-input w-20 px-2 py-1 text-xs"
-              />
-              <button
-                type="submit"
-                disabled={!topicInput.trim()}
-                className="btn-tactile icon-btn p-1.5"
-              >
-                <PlusIcon className="h-3.5 w-3.5" />
-              </button>
-            </form>
-          </div>
-        </div>
       </header>
 
       <div className="feed-scroll flex-1 overflow-auto">
-        <div className="mx-auto max-w-xl px-5 py-8 sm:max-w-2xl">
+        <div className="feed-content-width py-8">
           {visiblePosts.length === 0 ? (
             <div className="feed-empty-enter py-24 text-center">
               <p className="text-sm text-[var(--color-coffee-mocha)]">

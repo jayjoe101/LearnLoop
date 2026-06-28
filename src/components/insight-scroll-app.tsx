@@ -1,6 +1,5 @@
 "use client";
 
-import { AppSidebar } from "@/components/app-sidebar";
 import { Feed } from "@/components/feed";
 import type { Post, PostInteraction, Profile, Topic } from "@/lib/types";
 
@@ -20,15 +19,12 @@ export function InsightScrollApp({
   hasXaiKey,
 }: Props) {
   return (
-    <div className="flex min-h-screen">
-      <AppSidebar topics={topics} />
-      <Feed
-        posts={posts}
-        topics={topics}
-        interactions={interactions}
-        hasXaiKey={hasXaiKey}
-        feedStyle={profile?.feed_style}
-      />
-    </div>
+    <Feed
+      posts={posts}
+      topics={topics}
+      interactions={interactions}
+      hasXaiKey={hasXaiKey}
+      feedStyle={profile?.feed_style}
+    />
   );
 }
