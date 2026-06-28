@@ -41,6 +41,24 @@ export function XIcon({ className }: IconProps) {
   );
 }
 
+export function TagsIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 2H2v10l5.29 5.29a1 1 0 0 0 1.41 0L22 3.41a1 1 0 0 0 0-1.41L21.41 1a1 1 0 0 0-1.41 0L12 8.59V2z" />
+      <path d="M7 7h.01" />
+    </svg>
+  );
+}
+
 export function SparkIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

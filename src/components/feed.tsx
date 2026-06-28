@@ -79,9 +79,8 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
               ))}
             </nav>
 
-            <InterestsMenu topics={topics} />
-
             <div className="toolbar-icon-group">
+              <InterestsMenu topics={topics} />
               {filter === "all" && (
                 <>
                   <button

@@ -523,6 +523,111 @@ button:disabled {
   overflow: visible;
 }
 
+.interests-panel {
+  position: fixed;
+  z-index: 130;
+  width: min(18rem, calc(100vw - 2rem));
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--gradient-tooltip);
+  box-shadow: var(--shadow-tooltip);
+  overflow: hidden;
+  transform-origin: top center;
+  will-change: transform, opacity, filter;
+  animation: selection-explain-panel-in 0.44s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.interests-panel--closing {
+  animation: selection-explain-panel-out 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+.interests-panel__body {
+  padding: 0.875rem 0.875rem 0.65rem;
+}
+
+.interests-panel__heading {
+  margin-bottom: 0.625rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-coffee-mocha);
+}
+
+.interests-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.interests-panel__chip {
+  animation: interests-panel-chip-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+@keyframes interests-panel-chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.interests-panel__empty {
+  font-size: 0.75rem;
+  color: var(--color-coffee-mocha);
+}
+
+.interests-panel__form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem 0.65rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.interests-panel__input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-coffee-surface);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--color-coffee-text);
+}
+
+.interests-panel__input:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+.interests-panel__add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  padding: 0.45rem;
+  color: var(--color-coffee-text);
+  background: var(--gradient-chip);
+  border: 1px solid var(--color-border-subtle);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.interests-panel__add-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-tab-active);
+}
+
+.interests-panel__add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Portaled animated tooltips — escape overflow scroll containers */
 @keyframes action-tooltip-in-below {
   from {
