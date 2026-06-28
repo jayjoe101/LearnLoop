@@ -9,7 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { addTopic, removeTopic } from "@/lib/actions";
-import { PlusIcon, TagsIcon } from "@/components/icons";
+import { InterestsIcon, PlusIcon } from "@/components/icons";
 import { useActionTooltip } from "@/hooks/use-action-tooltip";
 import type { Topic } from "@/lib/types";
 
@@ -178,7 +178,7 @@ export function InterestsMenu({ topics }: Props) {
         className={`toolbar-icon-btn${open ? " toolbar-icon-btn-active" : ""}`}
       >
         <span className="toolbar-icon-glyph" aria-hidden>
-          <TagsIcon className="h-4 w-4" />
+          <InterestsIcon className="h-4 w-4" />
         </span>
       </button>
       {!open && tooltip.tooltipPortal}

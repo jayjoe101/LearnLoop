@@ -389,7 +389,7 @@ button:disabled {
 .btn-tactile-secondary:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--color-border-strong);
-  color: var(--color-coffee-text);
+  color: var(--color-accent-on-fill);
   box-shadow: var(--shadow-btn-secondary-hover);
 }
 
@@ -426,7 +426,7 @@ button:disabled {
 .icon-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--color-border-strong);
-  color: var(--color-coffee-text);
+  color: var(--color-accent-on-fill);
   box-shadow: var(--shadow-action-hover);
 }
 
@@ -483,7 +483,7 @@ button:disabled {
 .tab-tactile-active {
   background: var(--gradient-chip);
   box-shadow: var(--shadow-tab-active);
-  color: var(--color-coffee-text);
+  color: var(--color-accent-on-fill);
 }
 
 .feed-shell {
@@ -679,7 +679,7 @@ button:disabled {
 }
 
 .dark .action-tooltip__label {
-  color: var(--color-coffee-cream);
+  color: var(--color-accent-on-fill);
   border-color: var(--color-border-mid);
 }
 
@@ -736,7 +736,7 @@ button:disabled {
 }
 
 .toolbar-icon-btn:hover:not(:disabled):not(.toolbar-insight-btn--generating) {
-  color: var(--color-coffee-text);
+  color: var(--color-accent-on-fill);
   background: var(--gradient-chip);
   box-shadow: var(--shadow-tab-active);
   transform: translateY(-1px);
@@ -759,7 +759,7 @@ button:disabled {
 .toolbar-icon-btn-active {
   background: var(--gradient-chip);
   box-shadow: var(--shadow-tab-active);
-  color: var(--color-coffee-text);
+  color: var(--color-accent-on-fill);
 }
 
 .toolbar-icon-glyph {
@@ -881,7 +881,7 @@ button:disabled {
 
 .dark .toolbar-icon-btn:hover:not(:disabled):not(.toolbar-insight-btn--generating) {
   background: var(--gradient-chip);
-  color: var(--color-coffee-cream);
+  color: var(--color-accent-on-fill);
   box-shadow: var(--shadow-tab-active);
 }
 
@@ -959,7 +959,7 @@ button:disabled {
 }
 
 .dark .night-now-btn:hover:not(:disabled) {
-  color: var(--color-coffee-cream);
+  color: var(--color-accent-on-fill);
 }
 
 .post-card {
@@ -1809,7 +1809,7 @@ button:disabled {
 
 .dark .post-action-btn:hover:not(:disabled) {
   background: var(--gradient-chip);
-  color: var(--color-coffee-text);
+  color: var(--color-accent-on-fill);
   box-shadow: var(--shadow-tab-active);
 }
 

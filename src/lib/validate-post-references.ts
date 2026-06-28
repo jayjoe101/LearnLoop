@@ -1,15 +1,24 @@
 import {
-  externalUrlExists,
+  resolveCanonicalExternalUrl,
+  resolveGrokipediaCanonicalUrl,
   wikiTermPageExists,
   wikipediaPageExists,
 } from "@/lib/link-exists";
-import { sanitizeExternalUrl, wikipediaUrl } from "@/lib/wiki-links";
+import {
+  sanitizeExternalUrl,
+  wikipediaUrl,
+  type WikiSource,
+} from "@/lib/wiki-links";
 import type { PostLink, PostWikiTerm } from "@/lib/types";
 
 export type ReferencePostSlice = {
   body: string;
   links: PostLink[];
   wiki_terms: PostWikiTerm[];
+};
+
+export type ValidateReferencesOptions = {
+  wikiSource?: WikiSource;
 };
 
 const WIKI_MARKER_PATTERN = /\[\[([^\]]+)\]\]/g;
@@ -60,8 +69,28 @@ export function stripInvalidEmbeddedLinks(
   );
 }
 
+function rewriteEmbeddedLinkUrl(
+  body: string,
+  originalUrl: string,
+  canonicalUrl: string
+): string {
+  if (originalUrl === canonicalUrl) return body;
+
+  return body.replace(
+    EMBEDDED_LINK_PATTERN,
+    (match, label: string, rawUrl: string) => {
+      const url = sanitizeExternalUrl(rawUrl);
+      if (url === originalUrl) {
+        return `[${label}](${canonicalUrl})`;
+      }
+      return match;
+    }
+  );
+}
+
 async function partitionWikiTerms(
-  terms: string[]
+  terms: string[],
+  wikiSource: WikiSource
 ): Promise<{ valid: PostWikiTerm[]; invalid: Set<string> }> {
   const valid: PostWikiTerm[] = [];
   const invalid = new Set<string>();
@@ -73,7 +102,7 @@ async function partitionWikiTerms(
       if (seen.has(key)) return;
       seen.add(key);
 
-      const exists = await wikiTermPageExists(term, "wikipedia");
+      const exists = await wikiTermPageExists(term, wikiSource);
       if (exists) {
         valid.push({ term });
       } else {
@@ -99,15 +128,16 @@ async function partitionPostLinks(
         if (url) invalidUrls.add(url);
         return;
       }
-      if (seen.has(url)) return;
-      seen.add(url);
 
-      const exists = await externalUrlExists(url);
-      if (exists) {
-        valid.push({ label: link.label.trim(), url });
-      } else {
+      const canonical = await resolveCanonicalExternalUrl(url);
+      if (!canonical) {
         invalidUrls.add(url);
+        return;
       }
+      if (seen.has(canonical)) return;
+      seen.add(canonical);
+
+      valid.push({ label: link.label.trim(), url: canonical });
     })
   );
 
@@ -117,20 +147,31 @@ async function partitionPostLinks(
 async function partitionEmbeddedUrls(
   body: string,
   knownInvalid: ReadonlySet<string>
-): Promise<Set<string>> {
+): Promise<{
+  invalid: Set<string>;
+  rewrites: Array<{ from: string; to: string }>;
+}> {
   const invalid = new Set<string>();
+  const rewrites: Array<{ from: string; to: string }> = [];
 
   await Promise.all(
     [...body.matchAll(EMBEDDED_LINK_PATTERN)].map(async (match) => {
       const url = sanitizeExternalUrl(match[2]);
       if (!url || knownInvalid.has(url) || invalid.has(url)) return;
 
-      const exists = await externalUrlExists(url);
-      if (!exists) invalid.add(url);
+      const canonical = await resolveCanonicalExternalUrl(url);
+      if (!canonical) {
+        invalid.add(url);
+        return;
+      }
+
+      if (canonical !== url) {
+        rewrites.push({ from: url, to: canonical });
+      }
     })
   );
 
-  return invalid;
+  return { invalid, rewrites };
 }
 
 /**
@@ -139,18 +180,19 @@ async function partitionEmbeddedUrls(
  */
 export async function validateGeneratedPostReferences<
   T extends ReferencePostSlice,
->(post: T): Promise<T> {
+>(post: T, options: ValidateReferencesOptions = {}): Promise<T> {
+  const wikiSource = options.wikiSource ?? "wikipedia";
   const bodyTerms = extractWikiTermsFromBody(post.body);
   const listedTerms = post.wiki_terms.map((t) => t.term);
   const allTerms = [...bodyTerms, ...listedTerms];
 
   const { valid: wiki_terms, invalid: invalidWiki } =
-    await partitionWikiTerms(allTerms);
+    await partitionWikiTerms(allTerms, wikiSource);
 
   const { valid: links, invalidUrls: invalidSourceUrls } =
     await partitionPostLinks(post.links);
 
-  const invalidEmbedded = await partitionEmbeddedUrls(
+  const { invalid: invalidEmbedded, rewrites } = await partitionEmbeddedUrls(
     post.body,
     invalidSourceUrls
   );
@@ -160,15 +202,25 @@ export async function validateGeneratedPostReferences<
   let body = stripInvalidWikiMarkers(post.body, invalidWiki);
   body = stripInvalidEmbeddedLinks(body, invalidUrls);
 
+  for (const rewrite of rewrites) {
+    body = rewriteEmbeddedLinkUrl(body, rewrite.from, rewrite.to);
+  }
+
   let finalLinks = links;
-  if (
-    finalLinks.length === 0 &&
-    wiki_terms[0] &&
-    !invalidWiki.has(wiki_terms[0].term.toLowerCase()) &&
-    (await wikipediaPageExists(wiki_terms[0].term))
-  ) {
+  if (finalLinks.length === 0 && wiki_terms[0]) {
     const term = wiki_terms[0].term;
-    finalLinks = [{ label: `${term} on Wikipedia`, url: wikipediaUrl(term) }];
+    const termKey = term.toLowerCase();
+
+    if (!invalidWiki.has(termKey)) {
+      if (wikiSource === "grokipedia") {
+        const url = await resolveGrokipediaCanonicalUrl(term);
+        if (url) {
+          finalLinks = [{ label: `${term} on Grokipedia`, url }];
+        }
+      } else if (await wikipediaPageExists(term)) {
+        finalLinks = [{ label: `${term} on Wikipedia`, url: wikipediaUrl(term) }];
+      }
+    }
   }
 
   return {

@@ -81,31 +81,29 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
 
             <div className="toolbar-icon-group">
               <InterestsMenu topics={topics} />
-              {filter === "all" && (
-                <>
-                  <button
-                    ref={liveTooltip.anchorRef}
-                    type="button"
-                    onClick={toggleLive}
-                    aria-label={liveOn ? "Turn off live posting" : "Turn on live posting"}
-                    aria-describedby={liveTooltip.describedBy}
-                    aria-pressed={liveOn}
-                    {...liveTooltip.handlers}
-                    className={`toolbar-icon-btn toolbar-live-btn ${
-                      liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
-                    }`}
-                  >
-                    <span className="toolbar-icon-glyph" aria-hidden>
-                      <span
-                        className={`toolbar-live-dot ${
-                          liveOn ? "toolbar-live-dot-active" : ""
-                        }`}
-                      />
-                    </span>
-                  </button>
-                  {liveTooltip.tooltipPortal}
-                </>
-              )}
+              <>
+                <button
+                  ref={liveTooltip.anchorRef}
+                  type="button"
+                  onClick={toggleLive}
+                  aria-label={liveOn ? "Stop live posting" : "Live posting"}
+                  aria-describedby={liveTooltip.describedBy}
+                  aria-pressed={liveOn}
+                  {...liveTooltip.handlers}
+                  className={`toolbar-icon-btn toolbar-live-btn ${
+                    liveOn ? "toolbar-icon-btn-active toolbar-live-btn-active" : ""
+                  }`}
+                >
+                  <span className="toolbar-icon-glyph" aria-hidden>
+                    <span
+                      className={`toolbar-live-dot ${
+                        liveOn ? "toolbar-live-dot-active" : ""
+                      }`}
+                    />
+                  </span>
+                </button>
+                {liveTooltip.tooltipPortal}
+              </>
               <>
                 <button
                   ref={insightTooltip.anchorRef}
@@ -136,9 +134,7 @@ export function Feed({ posts, topics, interactions, feedStyle, hasXaiKey }: Prop
 
         <div
           className={`live-pending-banner border-t border-[var(--color-border)] ${
-            filter === "all" && pendingCount > 0
-              ? "live-pending-banner--visible"
-              : ""
+            pendingCount > 0 ? "live-pending-banner--visible" : ""
           }`}
         >
           <div className="flex justify-center py-2.5">

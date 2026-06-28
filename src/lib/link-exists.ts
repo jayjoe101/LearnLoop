@@ -1,5 +1,4 @@
 import {
-  grokipediaUrl,
   sanitizeExternalUrl,
   slugifyWikiTerm,
   type WikiSource,
@@ -105,23 +104,59 @@ export async function wikipediaPageExists(title: string): Promise<boolean> {
   });
 }
 
-export async function grokipediaPageExists(term: string): Promise<boolean> {
-  const trimmed = term.trim();
-  if (!trimmed || trimmed.length < 2) return false;
+function grokipediaSlugCandidates(term: string): string[] {
+  const normalized = term.trim().replace(/_/g, " ");
+  if (!normalized || normalized.length < 2) return [];
 
-  return remember("grokipedia", trimmed, async () => {
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const titleUnderscore = words
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join("_");
+  const titleSpaces = words
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+
+  const candidates = new Set<string>();
+  if (titleUnderscore) candidates.add(titleUnderscore);
+  if (titleSpaces) candidates.add(titleSpaces);
+  if (normalized !== titleUnderscore && normalized !== titleSpaces) {
+    candidates.add(normalized);
+  }
+  return [...candidates];
+}
+
+async function grokipediaSlugExists(slug: string): Promise<boolean> {
+  return remember("grokipedia-slug", slug, async () => {
     try {
-      const response = await fetch(grokipediaUrl(trimmed), {
-        method: "HEAD",
-        signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
-        headers: { "User-Agent": WIKI_USER_AGENT },
-        redirect: "follow",
-      });
+      const response = await fetch(
+        `https://grokipedia.com/page/${encodeURIComponent(slug)}`,
+        {
+          method: "HEAD",
+          signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+          headers: { "User-Agent": WIKI_USER_AGENT },
+          redirect: "follow",
+        }
+      );
       return response.ok;
     } catch {
       return false;
     }
   });
+}
+
+export async function resolveGrokipediaCanonicalUrl(
+  term: string
+): Promise<string | null> {
+  for (const slug of grokipediaSlugCandidates(term)) {
+    if (await grokipediaSlugExists(slug)) {
+      return `https://grokipedia.com/page/${encodeURIComponent(slug)}`;
+    }
+  }
+  return null;
+}
+
+export async function grokipediaPageExists(term: string): Promise<boolean> {
+  return (await resolveGrokipediaCanonicalUrl(term)) !== null;
 }
 
 export async function wikiTermPageExists(
@@ -131,6 +166,25 @@ export async function wikiTermPageExists(
   return source === "grokipedia"
     ? grokipediaPageExists(term)
     : wikipediaPageExists(term);
+}
+
+export async function resolveCanonicalExternalUrl(
+  url: string
+): Promise<string | null> {
+  const normalized = sanitizeExternalUrl(url);
+  if (!normalized) return null;
+
+  const grokTerm = grokipediaTermFromUrl(normalized);
+  if (grokTerm) {
+    return resolveGrokipediaCanonicalUrl(grokTerm);
+  }
+
+  const wikiTitle = wikipediaTitleFromUrl(normalized);
+  if (wikiTitle) {
+    return (await wikipediaPageExists(wikiTitle)) ? normalized : null;
+  }
+
+  return (await externalUrlExists(normalized)) ? normalized : null;
 }
 
 export async function externalUrlExists(url: string): Promise<boolean> {

@@ -14,12 +14,23 @@ export function slugifyWikiTerm(term: string): string {
   return term.trim().replace(/\s+/g, "_");
 }
 
+/** Grokipedia slugs use Title_Case words joined by underscores. */
+export function grokipediaSlug(term: string): string {
+  return term
+    .trim()
+    .replace(/_/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join("_");
+}
+
 export function wikipediaUrl(term: string): string {
   return `https://en.wikipedia.org/wiki/${encodeURIComponent(slugifyWikiTerm(term))}`;
 }
 
 export function grokipediaUrl(term: string): string {
-  return `https://grokipedia.com/page/${encodeURIComponent(slugifyWikiTerm(term))}`;
+  return `https://grokipedia.com/page/${encodeURIComponent(grokipediaSlug(term))}`;
 }
 
 export function pickWikiSource(

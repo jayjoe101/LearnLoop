@@ -22,6 +22,7 @@ import {
   finalizePostLinks,
   normalizeWikiTerms,
 } from "@/lib/post-content";
+import { pickWikiSource } from "@/lib/wiki-links";
 import { validateGeneratedPostReferences } from "@/lib/validate-post-references";
 import type { FeedStyle, PostLink, PostWikiTerm } from "@/lib/types";
 
@@ -354,7 +355,9 @@ async function callXai(
       const result = parseGeneratedContent(content, input, subject);
       if (!result) return null;
 
-      const validated = await validateGeneratedPostReferences(result);
+      const validated = await validateGeneratedPostReferences(result, {
+        wikiSource: pickWikiSource(input.style, persona.id),
+      });
       return { ...validated, persona };
     } catch {
       if (apiTry === 0) continue;
@@ -512,7 +515,9 @@ export async function generatePost(
 
     if (!fallback) continue;
 
-    const validated = await validateGeneratedPostReferences(fallback);
+    const validated = await validateGeneratedPostReferences(fallback, {
+      wikiSource: pickWikiSource(input.style, fallback.persona.id),
+    });
     const { accepted } = await acceptGeneratedPost(
       validated,
       recentTitles,
